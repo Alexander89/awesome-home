@@ -1,0 +1,45 @@
+{
+  "name": "awesome_home",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "ui:drone_control:start": "parcel src/drone_control/index.html --out-dir build/drone_control/debug",
+    "ui:drone_control:package": "ax apps package src/drone_control/ax-manifest.yml",
+    "ui:drone_control:build": "parcel build src/drone_control/index.html --out-dir build/drone_control/release --public-url ./"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/react": "^17.0.18",
+    "@types/react-dom": "^17.0.9",
+    "@typescript-eslint/eslint-plugin": "^4.29.2",
+    "@typescript-eslint/parser": "^4.29.2",
+    "eslint": "^7.32.0",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-plugin-prettier": "^3.4.0",
+    "eslint-plugin-react": "^7.24.0",
+    "nodemon": "^2.0.12",
+    "parcel-bundler": "^1.12.3",
+    "prettier": "^2.3.2",
+    "typescript": "^4.3.5"
+  },
+  "axp": {
+    "axpVersion": "1.5.0",
+    "pondVersion": 3
+  },
+  "dependencies": {
+    "@actyx-contrib/react-pond": "^3.0.0",
+    "@actyx/pond": "^3.0.2",
+    "@emotion/styled": "^11.3.0",
+    "@material-ui/core": "^5.0.0-beta.4",
+    "install": "^0.13.0",
+    "npm": "^7.21.0",
+    "ol": "^6.6.1",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2",
+    "rlayers": "^1.0.4"
+  }
+}
