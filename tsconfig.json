@@ -64,5 +64,6 @@
     "forceConsistentCasingInFileNames": true, /* Disallow inconsistently-cased references to the same file. */
     "skipLibCheck": true                      /* Skip type checking of all declaration files */
   },
-  "include": ["./src/**/*"]
+  "include": ["./src/**/*"],
+  "exclude": ["./src/launchpad", "**/node_modules"]
 }

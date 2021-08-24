@@ -25,10 +25,6 @@ type Props = {
   mode: MapMode
 }
 
-type Res = {
-  last: undefined | number[]
-  rel: number[][]
-}
 export type MapMode =
   | {
       mode: 'view'
@@ -68,6 +64,7 @@ export const OpenLayerMap = ({ mode }: Props): JSX.Element => {
       const tracker = setInterval(
         () =>
           navigator.geolocation.getCurrentPosition(({ coords }) => {
+            console.log('pos', coords)
             setGpsPos(new Point(fromLonLat([coords.longitude, coords.latitude])))
           }),
         1000,
@@ -88,14 +85,21 @@ export const OpenLayerMap = ({ mode }: Props): JSX.Element => {
       <RControl.RZoomSlider />
       <RControl.RCustom className="map-control map-control-track">
         <RContext.Consumer>
-          {() => <button onClick={() => setTrackLocation((v) => !v)}>track</button>}
+          {() => (
+            <button
+              onClick={() => setTrackLocation((v) => !v)}
+              style={{ display: mode.mode === 'new' ? 'block' : 'none' }}
+            >
+              {trackLocation ? 'Tracking Off' : 'Tracking On'}
+            </button>
+          )}
         </RContext.Consumer>
       </RControl.RCustom>
 
       <RControl.RCustom className="map-control map-control-set-wp">
         <RContext.Consumer>
           {() => (
-            <button style={{ display: mode.mode === 'new' ? 'block' : 'none' }}>
+            <button style={{ display: mode.mode === 'new' && trackLocation ? 'block' : 'none' }}>
               Set Waypoint
             </button>
           )}
@@ -169,7 +173,7 @@ export const OpenLayerMap = ({ mode }: Props): JSX.Element => {
               <RStyle.RStroke color="#0000ff" width={3} />
               <RStyle.RFill color="rgba(0, 0, 0, 0.75)" />
             </RStyle.RStyle>
-            <RFeature geometry={new LineString(WaypointCoordsToMapCoords(mode.track))} />
+            <RFeature geometry={new LineString(waypointCoordsToMapCoords(mode.track))} />
           </RLayerVector>
           {mode.selected !== undefined && (
             <RLayerVector>
@@ -178,7 +182,7 @@ export const OpenLayerMap = ({ mode }: Props): JSX.Element => {
                 <RStyle.RIcon src={monument} anchor={[0.5, 0.9]} />
               </RStyle.RStyle>
               <RFeature
-                geometry={new Point(WaypointCoordsToMapCoords([mode.track[mode.selected]])[0])}
+                geometry={new Point(waypointCoordsToMapCoords([mode.track[mode.selected]])[0])}
               />
             </RLayerVector>
           )}
@@ -192,7 +196,7 @@ export type WaypointCoords = {
   mapX: number
   mapY: number
   angle: number
-  dZ: number
+  height: number
   distance: number
 }
 
@@ -222,7 +226,7 @@ export const mapCoordsToWaypointCoords = (
         mapX: rawCoords[i][0],
         mapY: rawCoords[i][1],
         angle: angles[i],
-        dZ: 0,
+        height: 100,
         distance,
       },
     ],
@@ -245,5 +249,5 @@ const mkAngles = (vects: number[][]): number[] => {
     .acc.map((a) => (a > 180 ? a - 360 : a < -180 ? a + 360 : a))
 }
 
-export const WaypointCoordsToMapCoords = (wp: WaypointCoords[]): [number, number][] =>
+export const waypointCoordsToMapCoords = (wp: WaypointCoords[]): [number, number][] =>
   wp.reduce<[number, number][]>((acc, p) => [...acc, [p.mapX, p.mapY]], [])

@@ -6,7 +6,6 @@ import { MissionPlanner } from './MissionPlanner'
 
 export const App = (): JSX.Element => {
   const [selectedDrone, setSelectedDrone] = React.useState('')
-  const [selectedMission, setSelectedMission] = React.useState<string | undefined>(undefined)
   const [selectedLaunchpad, setSelectedLaunchpad] = React.useState<string | undefined>(undefined)
 
   return (
@@ -21,10 +20,7 @@ export const App = (): JSX.Element => {
       </Box>
 
       <Box style={{ flex: '1' }}>
-        <MissionPlanner
-          selectedMission={selectedMission}
-          onSelectedMissionChanged={setSelectedMission}
-        />
+        <MissionPlanner />
       </Box>
     </Container>
   )

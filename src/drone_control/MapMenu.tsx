@@ -1,4 +1,4 @@
-import { useFishFn } from '@actyx-contrib/react-pond'
+import { useRegistryFish } from '@actyx-contrib/react-pond'
 import {
   Box,
   Button,
@@ -10,34 +10,37 @@ import {
 } from '@material-ui/core'
 import * as React from 'react'
 import { PlannerMode } from './MissionPlanner'
-import { WaypointCoords } from './OpenLayerMap'
-import { MissionTwins } from '../fish/MissionTwin'
+import { DefinedState, MissionTwins } from '../fish/MissionTwin'
 
 type Props = {
   selectedMission: string | undefined
   onSelectedMissionChanged: (mission: string | undefined) => void
   mode: PlannerMode
   setMode: (mode: PlannerMode) => void
-  track: WaypointCoords[]
-  setTrack: (wp: WaypointCoords[]) => void
-  onMissionDefined: (missionName: string, waypoints: WaypointCoords[]) => void
+  onSaveNewMission: (missionName: string) => void
+  onCancel: () => void
+  onDelete: () => void
 }
 
 export const MapMenu = ({
-  mode,
-  setMode,
-  track,
-  onMissionDefined,
   selectedMission,
   onSelectedMissionChanged,
+  mode,
+  setMode,
+  onSaveNewMission,
+  onCancel,
+  onDelete,
 }: Props): JSX.Element => {
-  const missions = Object.keys(useFishFn(MissionTwins.allVisible, 0)?.state || {})
+  const missions = useRegistryFish(MissionTwins.allVisible(), Object.keys, MissionTwins.of)
+    .map((s) => s.state)
+    .filter((s): s is DefinedState => s.defined)
+    .map(({ name, id }) => ({ name, id }))
+
   const [newMissionName, setNewMissionName] = React.useState('')
 
   const newMission = () => {
     setMode('new')
   }
-  const removeMission = () => {}
 
   return (
     <Box style={{ display: 'flex' }}>
@@ -46,14 +49,6 @@ export const MapMenu = ({
           <Button variant="contained" title="new" onClick={newMission}>
             New
           </Button>
-          <Button
-            variant="contained"
-            title="disable"
-            onClick={removeMission}
-            disabled={Boolean(selectedMission)}
-          >
-            disable
-          </Button>
           <Box style={{ flex: '1' }}></Box>
           <FormControl variant="outlined" style={{ minWidth: 100 }}>
             <InputLabel id="mission-label">Mission</InputLabel>
@@ -61,15 +56,21 @@ export const MapMenu = ({
               labelId="mission-label"
               id="mission-select"
               value={selectedMission || ''}
-              onChange={({ target }) =>
-                onSelectedMissionChanged(Boolean(target.value) ? target.value : undefined)
-              }
+              onChange={({ target }) => {
+                if (Boolean(target.value)) {
+                  const [id, name] = target.value.split('::')
+                  setNewMissionName(name)
+                  onSelectedMissionChanged(id)
+                } else {
+                  onSelectedMissionChanged(undefined)
+                }
+              }}
               label="Mission"
             >
               <MenuItem value=""></MenuItem>
-              {missions.map((l) => (
-                <MenuItem key={l} value={l}>
-                  {l}
+              {missions.map(({ name, id }) => (
+                <MenuItem key={id} value={id + '::' + name}>
+                  {name}
                 </MenuItem>
               ))}
             </Select>
@@ -88,15 +89,23 @@ export const MapMenu = ({
             onChange={({ target }) => setNewMissionName(target.value)}
           />
           {mode === 'newDefined' && (
-            <Button
-              variant="contained"
-              title="Save"
-              color="success"
-              onClick={() => onMissionDefined(newMissionName, track)}
-            >
-              Save
-            </Button>
+            <>
+              <Button
+                variant="contained"
+                title="Save"
+                color="success"
+                onClick={() => onSaveNewMission(newMissionName)}
+              >
+                Save
+              </Button>
+              <Button variant="contained" title="Delete" color="error" onClick={() => onDelete()}>
+                Delete
+              </Button>
+            </>
           )}
+          <Button variant="contained" title="Cancel" color="warning" onClick={() => onCancel()}>
+            Cancel
+          </Button>
         </>
       )}
     </Box>

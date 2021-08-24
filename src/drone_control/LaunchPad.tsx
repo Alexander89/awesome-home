@@ -69,7 +69,7 @@ export const LaunchPad = ({
       <CardHeader
         title={
           <Box style={{ display: 'flex' }}>
-            <Typography variant="h5">Drone launch-pad</Typography>
+            <Typography variant="h5">Launchpad</Typography>
             <Box style={{ flex: '1' }}></Box>
             <FormControl variant="outlined" style={{ minWidth: 100 }}>
               <InputLabel id="launchpad-label">Launchpad</InputLabel>
@@ -95,69 +95,74 @@ export const LaunchPad = ({
           </Box>
         }
       />
-      <CardContent>
-        {!!launchpad && (
-          <Box style={{ display: 'flex' }}>
-            <Box>{launchpad.state.id}</Box>
-            <Box style={{ flex: 1 }}></Box>
-            <Box>{launchpad.state.state}</Box>
-          </Box>
-        )}
-        {!!launchpadMissionLog && (
-          <Box>
-            <Box>
-              <Box>Next missions</Box>
-              <Box>{launchpadMissionLog.state.nextMissions.join(', ')}</Box>
-            </Box>
-            {launchpadMissionLog.state.currentMission && (
-              <Box>
-                <Box>Current mission</Box>
-                <Box>{launchpadMissionLog.state.currentMission.id}</Box>
-                <Box>{launchpadMissionLog.state.currentMission.assignedDrone}</Box>
+      {selectedLaunchpad && (
+        <>
+          <CardContent>
+            {!!launchpad && (
+              <Box style={{ display: 'flex' }}>
+                <Box>{launchpad.state.id}</Box>
+                <Box style={{ flex: 1 }}></Box>
+                <Box>{launchpad.state.state}</Box>
               </Box>
             )}
-            <Box>
-              <Box>Completed missions</Box>
+            {!!launchpadMissionLog && (
               <Box>
-                {launchpadMissionLog.state.completedMissions
-                  .map((m) => `${m.ts.toLocaleTimeString()} : ${m.missionId} - ${m.drone}`)
-                  .join(', ')}
+                <Box>
+                  <Box>Next missions</Box>
+                  <Box>{launchpadMissionLog.state.nextMissions.join(', ')}</Box>
+                </Box>
+                {launchpadMissionLog.state.currentMission && (
+                  <Box>
+                    <Box>Current mission</Box>
+                    <Box>{launchpadMissionLog.state.currentMission.id}</Box>
+                    <Box>{launchpadMissionLog.state.currentMission.assignedDrone}</Box>
+                  </Box>
+                )}
+                <Box>
+                  <Box>Completed missions</Box>
+                  <Box>
+                    {launchpadMissionLog.state.completedMissions
+                      .map((m) => `${m.ts.toLocaleTimeString()} : ${m.missionId} - ${m.drone}`)
+                      .join(', ')}
+                  </Box>
+                </Box>
               </Box>
-            </Box>
-          </Box>
-        )}
-      </CardContent>
-      <CardActions>
-        <FormControl variant="outlined" style={{ minWidth: 100 }}>
-          <InputLabel id="Mission-label">Mission</InputLabel>
-          <Select
-            labelId="Mission-label"
-            id="Mission-select"
-            value={selectedMission || ''}
-            onChange={({ target }) =>
-              setSelectedMission(Boolean(target.value) ? target.value : undefined)
-            }
-            label="Mission"
-          >
-            <MenuItem value="">
-              <em></em>
-            </MenuItem>
-            {availableMissions.map((m) => (
-              <MenuItem key={m.id} value={m.id}>
-                {m.id} - {m.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <Button variant="contained" onClick={onStartMission}>
-          Start mission
-        </Button>
-      </CardActions>
-      <CardActions>
-        <Button variant="outlined" onClick={droneMounted}>
-          Drone Mounted
-        </Button>
-      </CardActions>
+            )}
+          </CardContent>
+          <CardActions>
+            <FormControl variant="outlined" style={{ minWidth: 100 }}>
+              <InputLabel id="Mission-label">Mission</InputLabel>
+              <Select
+                labelId="Mission-label"
+                id="Mission-select"
+                value={selectedMission || ''}
+                onChange={({ target }) =>
+                  setSelectedMission(Boolean(target.value) ? target.value : undefined)
+                }
+                label="Mission"
+              >
+                <MenuItem value="">
+                  <em></em>
+                </MenuItem>
+                {availableMissions.map((m) => (
+                  <MenuItem key={m.id} value={m.id}>
+                    {m.name} -{' '}
+                    {(m.waypoints.reduce((acc, v) => acc + v.duration, 0) / 1000).toFixed(1)} sec
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Button variant="contained" onClick={onStartMission}>
+              Start mission
+            </Button>
+          </CardActions>
+          <CardActions>
+            <Button variant="outlined" onClick={droneMounted}>
+              Drone Mounted
+            </Button>
+          </CardActions>
+        </>
+      )}
       <CardActions>
         <TextField
           label="Name"

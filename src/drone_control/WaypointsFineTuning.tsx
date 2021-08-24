@@ -13,6 +13,7 @@ import {
   Box,
 } from '@material-ui/core'
 import * as React from 'react'
+import './WaypointsFineTuning.css'
 import { Waypoint, Waypoints } from '../fish/MissionTwin'
 
 type Props = {
@@ -57,7 +58,7 @@ export const WaypointsFineTuning = ({
           break
         case 'zValue':
           if (wp.type === 'goto') {
-            setModifyingValue(`${wp.dZ}`)
+            setModifyingValue(`${wp.height}`)
           }
           break
       }
@@ -92,10 +93,46 @@ export const WaypointsFineTuning = ({
     setModifyingField(undefined)
   }
 
-  const mkDestination = (wp: Waypoint): string | JSX.Element | JSX.Element[] => {
+  const mkDestination = (wp: Waypoint, idx: number): string | JSX.Element | JSX.Element[] => {
     switch (wp.type) {
       case 'goto':
-        return <Typography>distance: {wp.distance.toFixed(2)}m</Typography>
+        const heightEdit = () => (
+          <ClickAwayListener
+            onClickAway={() => storeValue(wp, 'height', +modifyingValue)}
+            mouseEvent="onMouseDown"
+            touchEvent="onTouchStart"
+          >
+            <TextField
+              type="number"
+              ref={inputRef}
+              inputProps={{ step: 10 }}
+              value={+modifyingValue}
+              style={{ maxWidth: 100 }}
+              onChange={({ target }) => setModifyingValue(`${+target.value}`)}
+              onBlur={(ev) => storeValue(wp, 'height', +ev.target.value)}
+              onKeyDown={(ev: any) =>
+                ev.code === 'enter' && storeValue(wp, 'height', +ev.target.value)
+              }
+            />
+          </ClickAwayListener>
+        )
+
+        return (
+          <Box>
+            {idx !== 0 && <Typography>Distance: {wp.distance.toFixed(2)}m</Typography>}
+            <Box style={{ display: 'flex', alignItems: 'center' }}>
+              <Typography>Height: </Typography>
+              {modifyingField && modifyingField.type === 'zValue' && modifyingField.idx === idx ? (
+                heightEdit()
+              ) : (
+                <Typography onClick={() => changeHeight(idx)} className="changeable-value">
+                  {wp.height.toFixed(2)}
+                </Typography>
+              )}
+              <Typography>cm</Typography>
+            </Box>
+          </Box>
+        )
       case 'turn':
         return <Typography>rotate: {wp.deg}°</Typography>
       case 'delay':
@@ -118,7 +155,7 @@ export const WaypointsFineTuning = ({
           mouseEvent="onMouseDown"
           touchEvent="onTouchStart"
         >
-          <>
+          <Box style={{ display: 'flex', alignItems: 'center' }}>
             <TextField
               type="number"
               ref={inputRef}
@@ -131,17 +168,31 @@ export const WaypointsFineTuning = ({
                 ev.code === 'enter' && storeValue(wp, 'duration', +ev.target.value * scale)
               }
             />
-            {unit}
-          </>
+            <Typography>{unit}</Typography>
+          </Box>
         </ClickAwayListener>
       )
     }
     switch (wp.type) {
       case 'goto':
       case 'turn':
-        return `${(wp.duration / 1000).toFixed(1)} sec`
+        return (
+          <Box style={{ display: 'flex' }}>
+            <Typography onClick={() => changeDuration(idx)} className="changeable-value">
+              {(wp.duration / 1000).toFixed(1)}
+            </Typography>
+            <Typography>sec</Typography>
+          </Box>
+        )
       case 'delay':
-        return `${wp.duration} ms`
+        return (
+          <Box style={{ display: 'flex' }}>
+            <Typography onClick={() => changeDuration(idx)} className="changeable-value">
+              {wp.duration}
+            </Typography>
+            <Typography>ms</Typography>
+          </Box>
+        )
     }
   }
   const mkActions = (wp: Waypoint, idx: number): JSX.Element => {
@@ -149,7 +200,6 @@ export const WaypointsFineTuning = ({
       case 'goto':
         return (
           <>
-            <Button onClick={() => setModifyingField({ type: 'zValue', idx })}>+ Up-Down</Button>
             <Button onClick={() => addDelay(idx)}>+ Delay</Button>
           </>
         )
@@ -160,9 +210,9 @@ export const WaypointsFineTuning = ({
     }
   }
 
-  const changeDuration = (idx: number) => {
-    setModifyingField({ type: 'duration', idx })
-  }
+  const changeDuration = (idx: number) => setModifyingField({ type: 'duration', idx })
+  const changeHeight = (idx: number) => setModifyingField({ type: 'zValue', idx })
+
   const addDelay = (idx: number) => {
     setWaypoints([
       ...waypoints.reduce<Waypoints>(
@@ -187,8 +237,8 @@ export const WaypointsFineTuning = ({
           <TableRow>
             <TableCell></TableCell>
             <TableCell>Type</TableCell>
-            <TableCell>Target</TableCell>
-            <TableCell>Duration</TableCell>
+            <TableCell width={250}>Target</TableCell>
+            <TableCell width={140}>Duration</TableCell>
             <TableCell>Action</TableCell>
           </TableRow>
         </TableHead>
@@ -197,14 +247,17 @@ export const WaypointsFineTuning = ({
             <TableRow
               key={waypointId(idx, row)}
               onClick={() => setSelectedWaypoint(idx)}
-              style={{ backgroundColor: selectedWaypoint === idx ? '#e4e6f8' : undefined }}
+              style={{
+                backgroundColor: selectedWaypoint === idx ? '#e4e6f8' : undefined,
+                height: 90,
+              }}
             >
               <TableCell component="th" scope="row">
                 {idx}
               </TableCell>
-              <TableCell>{row.type}</TableCell>
-              <TableCell>{mkDestination(row)}</TableCell>
-              <TableCell onClick={() => changeDuration(idx)}>{mkDuration(row, idx)}</TableCell>
+              <TableCell>{idx === 0 ? 'take off' : row.type}</TableCell>
+              <TableCell>{mkDestination(row, idx)}</TableCell>
+              <TableCell>{mkDuration(row, idx)}</TableCell>
               <TableCell>{mkActions(row, idx)}</TableCell>
             </TableRow>
           ))}

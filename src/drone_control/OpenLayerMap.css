@@ -1,9 +1,6 @@
 .mission-map {
   height: 100%;
 }
-.map-control {
-
-}
 .map-control > button{
   width: 120px
 }

@@ -5,7 +5,8 @@ export type GoToWaypoint = {
   type: 'goto'
   mapX: number
   mapY: number
-  dZ: number
+  height: number
+  angle: number
   distance: number
   duration: number
 }
@@ -62,10 +63,10 @@ export type ShowMissionEvent = {
 export type MissionEvent = DefineMissionEvent | ShowMissionEvent
 
 const emitDefineMission: Emitter<DefineMissionEvent> = (emit, event) =>
-  emit(missionTag, { eventType: 'defineMission', ...event })
+  emit(missionTag.withId(event.id), { eventType: 'defineMission', ...event })
 
 const emitShowMission: Emitter<ShowMissionEvent> = (emit, event) =>
-  emit(missionTag, { eventType: 'showMission', ...event })
+  emit(missionTag.withId(event.id), { eventType: 'showMission', ...event })
 
 const missionTag = Tag<MissionEvent>('mission')
 const missionOrderTag = Tag<MissionEvent>('mission.order')
@@ -127,6 +128,7 @@ export const MissionTwins = {
       } else {
         state[event.id] = true
       }
+      console.log(event, state)
       return state
     },
   }),
