@@ -38,7 +38,6 @@ export const OpenMap = ({ mapLayer }: Props): JSX.Element => {
 
   const setLayer = (map: Map, layerType: MapLayers) => {
     const l = map.getLayers()
-    console.log(l)
     switch (layerType) {
       case 'satellite':
         map.addLayer(
@@ -70,7 +69,6 @@ export const OpenMap = ({ mapLayer }: Props): JSX.Element => {
       default:
         break
     }
-    console.log(map.getLayers())
   }
   return <div id="map" ref={mapRef} style={{ height: '100%' }}></div>
 }

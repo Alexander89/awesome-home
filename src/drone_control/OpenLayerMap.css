@@ -1,3 +1,17 @@
-.example-map {
-  height: 400px;
+.mission-map {
+  height: 100%;
+}
+.map-control {
+
+}
+.map-control > button{
+  width: 120px
+}
+.map-control-set-wp {
+  top: 80px;
+  right: 20px;
+}
+.map-control-track {
+  top: 40px;
+  right: 20px;
 }

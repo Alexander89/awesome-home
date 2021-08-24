@@ -3,35 +3,25 @@ import { Emitter } from './types'
 
 export type GoToWaypoint = {
   type: 'goto'
-  target: {
-    x: number
-    y: number
-    z: number
-  }
+  mapX: number
+  mapY: number
+  dZ: number
+  distance: number
   duration: number
 }
 
 export type TurnWaypoint = {
   type: 'turn'
-  turn: number
+  deg: number
   duration: number
 }
 
 export type DelayWaypoint = {
   type: 'delay'
-  timeMs: number
+  duration: number
 }
 
-export type Waypoint = {
-  nr: number
-  goTo?: {
-    x: number
-    y: number
-    z: number
-  }
-  delay?: number
-  duration?: number
-}
+export type Waypoint = GoToWaypoint | TurnWaypoint | DelayWaypoint
 export type Waypoints = Array<Waypoint>
 
 export type UndefinedState = {

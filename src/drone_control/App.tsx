@@ -6,12 +6,12 @@ import { MissionPlanner } from './MissionPlanner'
 
 export const App = (): JSX.Element => {
   const [selectedDrone, setSelectedDrone] = React.useState('')
-  const [selectedMission, setSelectedMission] = React.useState('')
+  const [selectedMission, setSelectedMission] = React.useState<string | undefined>(undefined)
   const [selectedLaunchpad, setSelectedLaunchpad] = React.useState<string | undefined>(undefined)
 
   return (
     <Container style={{ display: 'flex' }}>
-      <Box style={{ width: 500 }}>
+      <Box style={{ flex: '0 0 300px' }}>
         <LaunchPad
           selectedLaunchpad={selectedLaunchpad}
           onSelectionChanged={setSelectedLaunchpad}

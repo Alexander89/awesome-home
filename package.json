@@ -15,6 +15,7 @@
   "devDependencies": {
     "@types/react": "^17.0.18",
     "@types/react-dom": "^17.0.9",
+    "@types/uuid": "^8.3.1",
     "@typescript-eslint/eslint-plugin": "^4.29.2",
     "@typescript-eslint/parser": "^4.29.2",
     "eslint": "^7.32.0",
@@ -40,6 +41,7 @@
     "ol": "^6.6.1",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
-    "rlayers": "^1.0.4"
+    "rlayers": "^1.0.4",
+    "uuid": "^3.4.0"
   }
 }
