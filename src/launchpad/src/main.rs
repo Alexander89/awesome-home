@@ -1,17 +1,15 @@
-use crate::twin::current_state;
-use crate::twins::combine_latest::combine_latest;
-use crate::twins::mission_twin::MissionRegistryTwin;
-use crate::twins::mission_twin::MissionTwin;
-use crate::twins::switch_map::switch_map;
 use crate::twins::{
-    launchpad_twin::LaunchpadTwin,
-    twin::{self, observe},
+    launchpad_twin::LaunchpadTwin, mission_twin::MissionTwin, switch_map::switch_map,
 };
 use actyx_sdk::{app_id, AppManifest, HttpClient};
+use std::thread::sleep;
+use std::time::Duration;
 use tokio_stream::StreamExt;
+use twin::observe;
 use url::Url;
 
 mod launchpad;
+mod twin;
 mod twins;
 
 #[tokio::main]
@@ -28,10 +26,6 @@ pub async fn main() -> anyhow::Result<()> {
     // Http client to connect to actyx
     let url = Url::parse("http://localhost:4454")?;
     let service = HttpClient::new(url, app_manifest).await?;
-    let missions_thread = observe(
-        twin::execute_twin(service.clone(), MissionRegistryTwin),
-        |state| println!("Missions state {:?}", state),
-    );
 
     let launchpad_thread = observe(
         twin::execute_twin(
@@ -43,57 +37,26 @@ pub async fn main() -> anyhow::Result<()> {
         |state| println!("launchpad state {:?}", state),
     );
 
-    let missions_thread = observe(
-        twin::execute_twin(service.clone(), MissionRegistryTwin),
-        |state| println!("Missions state {:?}", state),
-    );
-
-    let mut s = switch_map(
-        twin::execute_twin(service.clone(), MissionRegistryTwin),
+    let mut current_mission = switch_map(
+        twin::execute_twin(
+            service.clone(),
+            LaunchpadTwin {
+                id: "Launchpad-01".to_string(),
+            },
+        ),
         |state| {
-            combine_latest(
-                state
-                    .into_iter()
-                    .map(|id| twin::execute_twin(service.clone(), MissionTwin { id }))
-                    .collect(),
-            )
+            state
+                .mission
+                .and_then(|id| Some(twin::execute_twin(service.clone(), MissionTwin { id })))
         },
     );
 
-    let res = s.next().await;
+    let res = current_mission.next().await;
     println!("All missions {:?}", res);
 
-    let _ = tokio::join!(missions_thread, launchpad_thread);
-    // let mission_registry = MissionRegistryTwin {};
-    // let mission_registry_1_state = twin::execute_twin(service.clone(), mission_registry)?;
+    sleep(Duration::from_secs_f32(2.0));
 
-    // let mission_registry = tokio::spawn(launchpad_1_state.map(move |state| {
-    //     println!("{:?}", state);
-    // }));
+    launchpad_thread.cancel_blocking().await;
 
-    // match launchpad_1_state
-    //     .try_poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>)
-    //     .await
-    // {
-    //     Ok(state) => {
-    //         println!("{:?}", state);
-    //         if let Some(mission) = state.mission {
-    //             println!("{:?}", mission);
-    //             match *(twin_current_state(service.clone(), MissionTwin { id: mission }).await)
-    //             {
-    //                 Ok(mission_state) => println!("{:?}", mission_state),
-    //                 Err(e) => println!("{:?}", e),
-    //             }
-    //         }
-    //     }
-    //     _ => (),
-    // }
-    // match mission_registry_1_state.try_recv() {
-    //     Ok(state) => {
-    //         println!("{:?}", state);
-    //     }
-    //     _ => (),
-    // }
-    // std::thread::sleep(Duration::from_secs_f32(0.33f32));
     Ok(())
 }

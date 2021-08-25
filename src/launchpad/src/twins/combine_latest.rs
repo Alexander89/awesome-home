@@ -38,6 +38,11 @@ where
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let mut self_proj = self.project();
+
+        if self_proj.streams.len() == 0 {
+            return Poll::Ready(None);
+        }
+
         let mut at_least_one_updated = false;
 
         for (idx, stream) in self_proj.streams.iter_mut().enumerate() {

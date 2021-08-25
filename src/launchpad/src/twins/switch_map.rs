@@ -1,7 +1,6 @@
 use core::task::Context;
 use futures::StreamExt;
 use pin_project_lite::pin_project;
-use std::fmt::Debug;
 use std::pin::Pin;
 use std::task::Poll;
 use tokio_stream::Stream;
@@ -21,7 +20,7 @@ pin_project! {
 pub fn switch_map<I, T, S, O, OI>(from: I, mapper: T) -> SwitchMap<I, T, O>
 where
     I: Stream<Item = S>,
-    T: Fn(S) -> O + Clone,
+    T: Fn(S) -> Option<O> + Clone,
     O: Stream<Item = OI>,
 {
     SwitchMap {
@@ -33,8 +32,8 @@ where
 
 impl<I, T, S, O, OI> Stream for SwitchMap<I, T, O>
 where
-    I: Stream<Item = S> + Unpin,
-    T: Fn(S) -> O + Clone,
+    I: Stream<Item = S>,
+    T: Fn(S) -> Option<O> + Clone,
     O: Stream<Item = OI>,
 {
     type Item = OI;
@@ -43,7 +42,7 @@ where
         let mut self_proj = self.project();
         while let Poll::Ready(p) = self_proj.from.poll_next_unpin(cx) {
             if let Some(state) = p {
-                self_proj.mapped_stream.set(Some((self_proj.mapper)(state)));
+                self_proj.mapped_stream.set((self_proj.mapper)(state));
             } else {
                 return Poll::Ready(None);
             }

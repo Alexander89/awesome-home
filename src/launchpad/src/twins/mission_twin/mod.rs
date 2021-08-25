@@ -1,4 +1,4 @@
-use super::twin::Twin;
+use crate::twin::Twin;
 use crate::twins::mission_twin::events::MissionEvent;
 use crate::twins::mission_twin::types::Waypoint;
 use actyx_sdk::{Event, Payload};

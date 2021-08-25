@@ -1,4 +1,4 @@
-use super::twin::Twin;
+use crate::twin::Twin;
 use crate::twins::launchpad_twin::events::LaunchPadEvent;
 use actyx_sdk::{Event, Payload};
 pub mod events;

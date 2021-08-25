@@ -259,19 +259,67 @@ where
 }
 
 #[allow(dead_code)]
-pub fn observe<T, S, F>(mut twin: T, func: F) -> tokio::task::JoinHandle<()>
+pub fn observe<T, S, F>(mut twin: T, func: F) -> Observation
 where
     F: Fn(S) -> () + Send + 'static,
-    S: Debug + Unpin + Clone + Send + std::marker::Sync,
+    S: Send,
     T: Stream<Item = S> + std::marker::Unpin + Send + 'static,
 {
-    tokio::spawn(async move {
+    let (command_sender, mut tx) = tokio::sync::mpsc::channel(1);
+    let handler = tokio::spawn(async move {
         'observeLaunchpad: loop {
-            match twin.next().await {
-                Some(state) => func(state),
-                None => break 'observeLaunchpad,
-            }
+            tokio::select! {
+                res = twin.next() => {
+                    match res {
+                        Some(state) => func(state),
+                        None => break 'observeLaunchpad,
+                    }
+                }
+                _ = tx.recv() => {
+                    break 'observeLaunchpad;
+                }
+            };
         }
         println!("I'm done here");
-    })
+    });
+
+    Observation {
+        command_sender,
+        handler,
+    }
+}
+
+pub struct Observation {
+    command_sender: mpsc::Sender<bool>,
+    handler: tokio::task::JoinHandle<()>,
+}
+
+impl Into<tokio::task::JoinHandle<()>> for Observation {
+    fn into(self) -> tokio::task::JoinHandle<()> {
+        self.handler
+    }
+}
+
+impl Observation {
+    #[allow(dead_code)]
+    pub async fn cancel(&self) -> Result<(), mpsc::error::SendError<bool>> {
+        self.command_sender.send(true).await
+    }
+    #[allow(dead_code)]
+    pub async fn cancel_blocking(self) -> bool {
+        let (a, b) = tokio::join!(self.command_sender.send(true), self.handler);
+        a.is_ok() && b.is_ok()
+    }
+    #[allow(dead_code)]
+    pub fn handler(&self) -> &tokio::task::JoinHandle<()> {
+        &self.handler
+    }
+    #[allow(dead_code)]
+    pub fn as_handler(self) -> tokio::task::JoinHandle<()> {
+        self.handler
+    }
+    #[allow(dead_code)]
+    pub fn extract(self) -> (tokio::task::JoinHandle<()>, mpsc::Sender<bool>) {
+        (self.handler, self.command_sender)
+    }
 }
