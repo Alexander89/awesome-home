@@ -35,7 +35,7 @@ impl<I, T, S, O, OI> Stream for SwitchMap<I, T, O>
 where
     I: Stream<Item = S> + Unpin,
     T: Fn(S) -> O + Clone,
-    O: Stream<Item = OI> + Debug,
+    O: Stream<Item = OI>,
 {
     type Item = OI;
 

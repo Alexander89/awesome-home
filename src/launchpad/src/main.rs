@@ -59,8 +59,9 @@ pub async fn main() -> anyhow::Result<()> {
             )
         },
     );
-    let res = s.next().await.unwrap();
-    println!("MissionTwinState {:?}", res);
+
+    let res = s.next().await;
+    println!("All missions {:?}", res);
 
     let _ = tokio::join!(missions_thread, launchpad_thread);
     // let mission_registry = MissionRegistryTwin {};

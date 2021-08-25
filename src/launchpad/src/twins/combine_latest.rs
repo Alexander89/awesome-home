@@ -64,6 +64,7 @@ where
                 self_proj
                     .last_state
                     .iter()
+                    .filter(|s| s.is_some())
                     .map(|s| s.clone().unwrap())
                     .collect(),
             ))
