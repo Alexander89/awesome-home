@@ -59,7 +59,7 @@ where
             }
         }
 
-        if *self_proj.live_mode == false && at_least_one_updated {
+        if *self_proj.live_mode == true && at_least_one_updated {
             Poll::Ready(Some(
                 self_proj
                     .last_state
