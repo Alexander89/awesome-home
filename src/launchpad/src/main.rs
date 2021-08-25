@@ -1,6 +1,8 @@
+// use crate::twin::twin_current_state;
+// use crate::twins::mission_twin::{MissionRegistryTwin, MissionTwin};
 use crate::twins::{launchpad_twin::LaunchpadTwin, twin};
 use actyx_sdk::{app_id, AppManifest, HttpClient};
-use std::time::Duration;
+use futures::StreamExt;
 use url::Url;
 
 mod launchpad;
@@ -18,23 +20,56 @@ pub async fn main() -> anyhow::Result<()> {
 
     // Url of the locally running Actyx node
     let url = Url::parse("http://localhost:4454")?;
-    // client for
+    // Http client to connect to actyx
     let service = HttpClient::new(url, app_manifest).await?;
 
-    let launchpad_1 = LaunchpadTwin {
-        id: "1".to_string(),
-    };
-    let state_changed = twin::execute_twin(service.clone(), launchpad_1)?;
+    // let mission_registry = MissionRegistryTwin {};
+    // let mission_registry_1_state = twin::execute_twin(service.clone(), mission_registry)?;
 
-    loop {
-        match state_changed.recv() {
-            Ok(state) => {
-                println!("{:?}", state);
-            }
-            Err(e) => {
-                println!("err: {}", e);
+    let mut observer = twin::execute_twin(
+        service.clone(),
+        LaunchpadTwin {
+            id: "Launchpad-01".to_string(),
+        },
+    )
+    .unwrap();
+    let launchpad = tokio::spawn(async move {
+        'observeLaunchpad: loop {
+            match observer.next().await {
+                Some(state) => println!("launchpad state {:?}", state),
+                None => break 'observeLaunchpad,
             }
         }
-        std::thread::sleep(Duration::from_secs_f32(0.33f32));
-    }
+        println!("I'm done here");
+    });
+
+    // let mission_registry = tokio::spawn(launchpad_1_state.map(move |state| {
+    //     println!("{:?}", state);
+    // }));
+    let _ = tokio::join!(launchpad);
+    // match launchpad_1_state
+    //     .try_poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>)
+    //     .await
+    // {
+    //     Ok(state) => {
+    //         println!("{:?}", state);
+    //         if let Some(mission) = state.mission {
+    //             println!("{:?}", mission);
+    //             match *(twin_current_state(service.clone(), MissionTwin { id: mission }).await)
+    //             {
+    //                 Ok(mission_state) => println!("{:?}", mission_state),
+    //                 Err(e) => println!("{:?}", e),
+    //             }
+    //         }
+    //     }
+    //     _ => (),
+    // }
+    // match mission_registry_1_state.try_recv() {
+    //     Ok(state) => {
+    //         println!("{:?}", state);
+    //     }
+    //     _ => (),
+    // }
+    // std::thread::sleep(Duration::from_secs_f32(0.33f32));
+    Ok(())
 }
