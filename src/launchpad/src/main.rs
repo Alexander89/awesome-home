@@ -1,8 +1,11 @@
 // use crate::twin::twin_current_state;
 // use crate::twins::mission_twin::{MissionRegistryTwin, MissionTwin};
-use crate::twins::{launchpad_twin::LaunchpadTwin, twin};
+use crate::twins::mission_twin::MissionRegistryTwin;
+use crate::twins::{
+    launchpad_twin::LaunchpadTwin,
+    twin::{self, observe},
+};
 use actyx_sdk::{app_id, AppManifest, HttpClient};
-use futures::StreamExt;
 use url::Url;
 
 mod launchpad;
@@ -23,30 +26,30 @@ pub async fn main() -> anyhow::Result<()> {
     // Http client to connect to actyx
     let service = HttpClient::new(url, app_manifest).await?;
 
+    let launchpad_thread = observe(
+        twin::execute_twin(
+            service.clone(),
+            LaunchpadTwin {
+                id: "Launchpad-01".to_string(),
+            },
+        )?,
+        |state| println!("launchpad state {:?}", state),
+    );
+
+    let missions_thread = observe(
+        twin::execute_twin(service.clone(), MissionRegistryTwin {})?,
+        |state| println!("Missions state {:?}", state),
+    );
+
+    let _ = tokio::join!(missions_thread, launchpad_thread);
+
     // let mission_registry = MissionRegistryTwin {};
     // let mission_registry_1_state = twin::execute_twin(service.clone(), mission_registry)?;
-
-    let mut observer = twin::execute_twin(
-        service.clone(),
-        LaunchpadTwin {
-            id: "Launchpad-01".to_string(),
-        },
-    )
-    .unwrap();
-    let launchpad = tokio::spawn(async move {
-        'observeLaunchpad: loop {
-            match observer.next().await {
-                Some(state) => println!("launchpad state {:?}", state),
-                None => break 'observeLaunchpad,
-            }
-        }
-        println!("I'm done here");
-    });
 
     // let mission_registry = tokio::spawn(launchpad_1_state.map(move |state| {
     //     println!("{:?}", state);
     // }));
-    let _ = tokio::join!(launchpad);
+
     // match launchpad_1_state
     //     .try_poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>)
     //     .await

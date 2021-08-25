@@ -259,3 +259,21 @@ where
         Poll::Pending
     }
 }
+
+#[allow(dead_code)]
+pub fn observe<T, S, F>(mut twin: T, func: F) -> tokio::task::JoinHandle<()>
+where
+    F: Fn(S) -> () + Send + 'static,
+    S: Debug + Unpin + Clone + Send + std::marker::Sync,
+    T: Stream<Item = S> + std::marker::Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        'observeLaunchpad: loop {
+            match twin.next().await {
+                Some(state) => func(state),
+                None => break 'observeLaunchpad,
+            }
+        }
+        println!("I'm done here");
+    })
+}
