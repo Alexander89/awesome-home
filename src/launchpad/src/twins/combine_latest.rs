@@ -25,7 +25,7 @@ where
     CombineLatest {
         last_state: vec![None; streams.len()],
         streams,
-        live_mode: true,
+        live_mode: false,
     }
 }
 
@@ -49,9 +49,8 @@ where
 
                     at_least_one_updated = true;
                     if *self_proj.live_mode == false {
-                        self_proj
-                            .live_mode
-                            .set(self_proj.last_state.iter().all(|s| s.is_some()));
+                        let all_defined = self_proj.last_state.iter().all(|s| s.is_some());
+                        self_proj.live_mode.set(all_defined);
                     }
                 } else {
                     break 'stateCollectLoop;
