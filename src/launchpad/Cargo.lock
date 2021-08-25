@@ -725,6 +725,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "futures",
+ "pin-project-lite",
  "rppal",
  "serde",
  "tello",

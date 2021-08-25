@@ -67,7 +67,7 @@ impl Twin for MissionTwin {
 }
 
 #[derive(Clone)]
-pub struct MissionRegistryTwin {}
+pub struct MissionRegistryTwin;
 
 impl Twin for MissionRegistryTwin {
     type State = HashSet<String>;
@@ -84,8 +84,9 @@ impl Twin for MissionRegistryTwin {
     }
     fn reducer(mut state: Self::State, event: Event<Payload>) -> Self::State {
         //println!("{:?}", event.payload.json_value());
-        if let Ok(ev) = event.extract::<MissionEvent>() {
-            match ev.payload {
+
+        match event.extract::<MissionEvent>() {
+            Ok(ev) => match ev.payload {
                 MissionEvent::DefineMission(e) => {
                     state.insert(e.id);
                     state
@@ -94,9 +95,11 @@ impl Twin for MissionRegistryTwin {
                     state.remove(&e.id);
                     state
                 }
+            },
+            Err(e) => {
+                println!("can't parse {:?}", e);
+                state
             }
-        } else {
-            state
         }
     }
 }

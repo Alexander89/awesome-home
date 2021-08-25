@@ -29,10 +29,7 @@ pub trait Twin: Clone + Send {
 }
 
 #[allow(dead_code)]
-pub fn execute_twin<S, T>(
-    event_service: S,
-    twin: T,
-) -> Result<TwinExecuter<T::State>, anyhow::Error>
+pub fn execute_twin<S, T>(event_service: S, twin: T) -> TwinExecuter<T::State>
 where
     S: EventService + Send + std::marker::Sync + 'static,
     T: Twin + Clone + std::marker::Sync + 'static,
@@ -89,14 +86,11 @@ where
             }
         }
     });
-    Ok(TwinExecuter::new(rx, 100))
+    TwinExecuter::new(rx, 100)
 }
 
 #[allow(dead_code)]
-pub async fn twin_current_state<S, T>(
-    event_service: S,
-    twin: T,
-) -> Box<Result<T::State, anyhow::Error>>
+pub async fn current_state<S, T>(event_service: S, twin: T) -> Box<Result<T::State, anyhow::Error>>
 where
     T: Twin + Clone + std::marker::Sync + 'static,
     S: EventService + Send + std::marker::Sync + 'static,
@@ -180,17 +174,21 @@ where
     type Item = S;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        // process input to get the latest state and reset the debounce time
         match self.input.poll_recv(cx) {
             Poll::Ready(Some(state)) => {
                 #[allow(unused_unsafe)]
                 let this: &mut Self = unsafe { Pin::get_mut(self) };
                 this.last_state = Some(state);
                 this.last_interaction = Instant::now();
+                // immediately request next poll to process all events in the input stream
                 cx.waker().wake_by_ref();
                 return Poll::Pending;
             }
+            // if input stream terminates, the last state could be published immediately
             Poll::Ready(None) => return Poll::Ready(self.last_state.clone()),
-            _ => (),
+            // continue with debounce timer
+            Poll::Pending => (),
         };
 
         if self.last_interaction.elapsed().as_millis() as u64 >= self.debounce_time_ms {
