@@ -1,8 +1,12 @@
+use std::borrow::Borrow;
+use std::time::Duration;
+
 use crate::twin::{resolve_registry, resolve_relation};
 use crate::twins::mission_twin::MissionRegistryTwin;
 use crate::twins::{launchpad_twin::LaunchpadTwin, mission_twin::MissionTwin};
 use actyx_sdk::{app_id, AppManifest, HttpClient};
 use tokio::select;
+use tokio::time::sleep;
 use tokio_stream::StreamExt;
 use url::Url;
 
@@ -25,6 +29,8 @@ pub async fn main() -> anyhow::Result<()> {
     let url = Url::parse("http://localhost:4454")?;
     let service = HttpClient::new(url, app_manifest).await?;
 
+    LaunchpadTwin::emit_launchpad_registered(service.clone(), "Launchpad-01".to_string()).await?;
+
     // let launchpad_thread = observe(
     //     twin::execute_twin(
     //         service.clone(),
@@ -34,7 +40,7 @@ pub async fn main() -> anyhow::Result<()> {
     //     ),
     //     |state| println!("launchpad state {:?}", state),
     // );
-    let mut launchpad_state = twin::execute_twin(
+    let mut launchpad_stream = twin::execute_twin(
         service.clone(),
         LaunchpadTwin {
             id: "Launchpad-01".to_string(),
@@ -42,9 +48,9 @@ pub async fn main() -> anyhow::Result<()> {
     )
     .as_stream();
 
-    let mut all_missions = resolve_registry(service.clone(), MissionRegistryTwin, |s| {
-        s.into_iter().map(|id| MissionTwin { id }).collect()
-    });
+    // let mut all_missions = resolve_registry(service.clone(), MissionRegistryTwin, |s| {
+    //     s.into_iter().map(|id| MissionTwin { id }).collect()
+    // });
 
     let mut current_mission = resolve_relation(
         service.clone(),
@@ -54,21 +60,50 @@ pub async fn main() -> anyhow::Result<()> {
         |s| s.mission.map(|id| MissionTwin { id }),
     );
 
+    let mut launchpad_state = None;
+    // let mut missions_state = None;
+    let mut mission_state = None;
+
     loop {
         select! {
-            launchpad = launchpad_state.next() => {
-                if let Some(next) = launchpad {
-                    println!("current mission {:?}", next)
+            new_launchpad = launchpad_stream.next() => launchpad_state = new_launchpad,
+            // new_missions = all_missions.next() => missions_state = new_missions,
+            new_mission = current_mission.next() => mission_state = new_mission,
+        }
+        if let (Some(launchpad), Some(mission)) = (launchpad_state.borrow(), mission_state.borrow())
+        {
+            match (launchpad.mounted_drone.borrow(), launchpad.drone_enabled) {
+                (Some(mounted_drone), false) => {
+                    println!("enable drone");
+                    sleep(Duration::from_millis(5000)).await;
+
+                    LaunchpadTwin::emit_drone_activated(
+                        service.clone(),
+                        "Launchpad-01".to_string(),
+                        mounted_drone.to_owned(),
+                    )
+                    .await?;
+                    //LaunchpadTwin::emit_launchpad_registered(service.clone(), "Launchpad-01".to_string()).await?;
                 }
-            },
-            mission = all_missions.next() => {
-                if let Some(m) = mission {
-                    println!("current mission {:?}", m)
+                (Some(mounted_drone), true) => {
+                    println!("drone started");
+                    sleep(Duration::from_millis(5000)).await;
+                    LaunchpadTwin::emit_drone_started(
+                        service.clone(),
+                        "Launchpad-01".to_string(),
+                        mounted_drone.to_owned(),
+                        mission.id.to_owned(),
+                    )
+                    .await?;
+                    //LaunchpadTwin::emit_launchpad_registered(service.clone(), "Launchpad-01".to_string()).await?;
                 }
-            }
-            mission = current_mission.next() => {
-                println!("current mission {:?}", mission)
+                _ => (),
             }
         }
+
+        println!("--------\n");
+        println!("launchpad {:?}", launchpad_state);
+        println!("current mission {:?}", mission_state);
+        println!("--------\n");
     }
 }

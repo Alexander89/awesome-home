@@ -728,6 +728,7 @@ dependencies = [
  "pin-project-lite",
  "rppal",
  "serde",
+ "serde_json",
  "tello",
  "tokio",
  "tokio-stream",

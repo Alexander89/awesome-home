@@ -1,19 +1,20 @@
+#![allow(dead_code)]
 use actyx_sdk::{
     language::Query,
     service::{
-        EventService, Order, QueryRequest, QueryResponse, SessionId, StartFrom,
-        SubscribeMonotonicRequest, SubscribeMonotonicResponse,
+        EventService, Order, PublishEvent, PublishRequest, QueryRequest, QueryResponse, SessionId,
+        StartFrom, SubscribeMonotonicRequest, SubscribeMonotonicResponse,
     },
-    Event, EventKey, Metadata, OffsetMap, Payload,
+    Event, EventKey, Metadata, OffsetMap, Payload, Tag, TagSet,
 };
 use core::task::Waker;
 use futures::task::Context;
 use futures::StreamExt;
 use futures::{stream, task::Poll};
-use std::sync::Mutex;
 use std::thread::JoinHandle;
 use std::{fmt::Debug, sync::Arc};
 use std::{pin::Pin, thread, time::Instant};
+use std::{str::FromStr, sync::Mutex};
 use std::{thread::sleep, time::Duration};
 use tokio::sync::mpsc;
 use tokio_stream::Stream;
@@ -30,7 +31,6 @@ pub trait Twin: Clone + Send + Sync {
     fn reducer(state: Self::State, event: Event<Payload>) -> Self::State;
 }
 
-#[allow(dead_code)]
 pub fn execute_twin<S, T>(event_service: S, twin: T) -> TwinExecuter<T::State>
 where
     S: EventService + Sync + 'static,
@@ -91,7 +91,6 @@ where
     TwinExecuter::new(rx, 100)
 }
 
-#[allow(dead_code)]
 pub async fn current_state<S, T>(event_service: S, twin: T) -> Box<Result<T::State, anyhow::Error>>
 where
     T: Twin + Clone + std::marker::Sync + 'static,
@@ -168,7 +167,6 @@ where
         }
     }
 
-    #[allow(dead_code)]
     pub fn as_stream(self) -> impl Stream<Item = S> + Unpin {
         let duration = Duration::from_millis(self.debounce_time_ms);
         Box::pin(stream::unfold(self.input, move |mut input| async move {
@@ -279,7 +277,6 @@ where
     }
 }
 
-#[allow(dead_code)]
 pub fn observe<T, S, F>(mut stream: T, state_changed: F) -> Observation
 where
     F: Fn(S) -> () + Send + 'static,
@@ -310,7 +307,6 @@ where
     }
 }
 
-#[allow(dead_code)]
 pub fn resolve_registry<A, T, E>(
     service: A,
     registry_twin: T,
@@ -334,7 +330,6 @@ where
     })
 }
 
-#[allow(dead_code)]
 pub fn resolve_relation<A, T, E>(
     service: A,
     registry_twin: T,
@@ -365,25 +360,45 @@ impl Into<tokio::task::JoinHandle<()>> for Observation {
 }
 
 impl Observation {
-    #[allow(dead_code)]
     pub async fn cancel(&self) -> Result<(), mpsc::error::SendError<bool>> {
         self.command_sender.send(true).await
     }
-    #[allow(dead_code)]
+
     pub async fn cancel_blocking(self) -> bool {
         let (a, b) = tokio::join!(self.command_sender.send(true), self.handler);
         a.is_ok() && b.is_ok()
     }
-    #[allow(dead_code)]
+
     pub fn handler(&self) -> &tokio::task::JoinHandle<()> {
         &self.handler
     }
-    #[allow(dead_code)]
+
     pub fn as_handler(self) -> tokio::task::JoinHandle<()> {
         self.handler
     }
-    #[allow(dead_code)]
+
     pub fn extract(self) -> (tokio::task::JoinHandle<()>, mpsc::Sender<bool>) {
         (self.handler, self.command_sender)
+    }
+}
+
+pub fn tag_with_id<T>(base: &str, id: &T) -> TagSet
+where
+    T: core::fmt::Display,
+{
+    let base_tag = Tag::from_str(base).unwrap();
+    let id_tag = base_tag.clone() + format!(":{}", id);
+    TagSet::from(vec![base_tag, id_tag])
+}
+
+pub fn mk_publish_request<T>(tags: TagSet, event: &T) -> PublishRequest
+where
+    T: serde::Serialize,
+{
+    PublishRequest {
+        data: vec![PublishEvent {
+            tags,
+            payload: Payload::compact(&serde_json::json!(event)).unwrap(),
+        }],
     }
 }

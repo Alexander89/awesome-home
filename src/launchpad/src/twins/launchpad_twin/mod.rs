@@ -1,6 +1,9 @@
+use self::events as ev;
 use crate::twin::Twin;
-use crate::twins::launchpad_twin::events::LaunchPadEvent;
-use actyx_sdk::{Event, Payload};
+use crate::twin::{mk_publish_request, tag_with_id};
+use actyx_sdk::service::{EventService, PublishResponse};
+use actyx_sdk::{Event, Payload, TagSet};
+
 pub mod events;
 
 #[derive(Clone, Debug)]
@@ -45,44 +48,44 @@ impl Twin for LaunchpadTwin {
 
     fn reducer(state: Self::State, event: Event<Payload>) -> Self::State {
         //println!("{:?}", event.payload.json_value());
-        if let Ok(ev) = event.extract::<LaunchPadEvent>() {
+        if let Ok(ev) = event.extract::<ev::LaunchPadEvent>() {
             match ev.payload {
-                LaunchPadEvent::DroneMounted(e) => Self::State {
+                ev::LaunchPadEvent::DroneMounted(e) => Self::State {
                     id: e.id,
                     ready_to_launch: true,
                     mission: state.mission,
                     mounted_drone: Some(e.drone),
                     drone_enabled: false,
                 },
-                LaunchPadEvent::LaunchPadRegistered(e) => Self::State {
+                ev::LaunchPadEvent::LaunchPadRegistered(e) => Self::State {
                     id: e.id,
                     ready_to_launch: state.ready_to_launch,
                     mission: state.mission,
                     mounted_drone: state.mounted_drone,
                     drone_enabled: state.drone_enabled,
                 },
-                LaunchPadEvent::DroneActivated(e) => Self::State {
+                ev::LaunchPadEvent::DroneActivated(e) => Self::State {
                     id: e.id,
                     ready_to_launch: state.ready_to_launch,
                     mission: state.mission,
                     mounted_drone: Some(e.drone),
                     drone_enabled: true,
                 },
-                LaunchPadEvent::ActivateDroneTimeout(e) => Self::State {
+                ev::LaunchPadEvent::ActivateDroneTimeout(e) => Self::State {
                     id: e.id,
                     ready_to_launch: state.ready_to_launch,
                     mission: state.mission,
                     mounted_drone: state.mounted_drone,
                     drone_enabled: false,
                 },
-                LaunchPadEvent::DroneStarted(e) => Self::State {
+                ev::LaunchPadEvent::DroneStarted(e) => Self::State {
                     id: e.id,
                     ready_to_launch: false,
                     mission: state.mission,
                     mounted_drone: None,
                     drone_enabled: false,
                 },
-                LaunchPadEvent::MissionQueued(e) => Self::State {
+                ev::LaunchPadEvent::MissionQueued(e) => Self::State {
                     id: e.launchpad_id,
                     ready_to_launch: state.ready_to_launch,
                     mission: Some(e.mission_id),
@@ -93,5 +96,77 @@ impl Twin for LaunchpadTwin {
         } else {
             state
         }
+    }
+}
+
+pub fn tag_launchpad_id<T>(id: &T) -> TagSet
+where
+    T: core::fmt::Display,
+{
+    tag_with_id("launchpad", &id)
+}
+
+impl LaunchpadTwin {
+    #[allow(dead_code)]
+    pub async fn emit_launchpad_registered(
+        service: impl EventService,
+        id: String,
+    ) -> Result<PublishResponse, anyhow::Error> {
+        service
+            .publish(mk_publish_request(
+                tag_launchpad_id(&id),
+                &ev::LaunchPadEvent::LaunchPadRegistered(ev::LaunchPadRegisteredEvent { id }),
+            ))
+            .await
+    }
+
+    #[allow(dead_code)]
+    pub async fn emit_drone_started(
+        service: impl EventService,
+        id: String,
+        drone: String,
+        mission_id: String,
+    ) -> Result<PublishResponse, anyhow::Error> {
+        service
+            .publish(mk_publish_request(
+                tag_launchpad_id(&id),
+                &ev::LaunchPadEvent::DroneStarted(ev::DroneStartedEvent {
+                    id,
+                    drone,
+                    mission_id,
+                }),
+            ))
+            .await
+    }
+
+    #[allow(dead_code)]
+    pub async fn emit_activate_drone_timeout(
+        service: impl EventService,
+        id: String,
+        drone: String,
+    ) -> Result<PublishResponse, anyhow::Error> {
+        service
+            .publish(mk_publish_request(
+                tag_launchpad_id(&id),
+                &ev::LaunchPadEvent::ActivateDroneTimeout(ev::ActivateDroneTimeoutEvent {
+                    id,
+                    drone,
+                }),
+            ))
+            .await
+    }
+
+    #[allow(dead_code)]
+    pub async fn emit_drone_activated(
+        service: impl EventService,
+        id: String,
+        drone: String,
+    ) -> Result<PublishResponse, anyhow::Error> {
+        service
+            .publish(mk_publish_request(
+                tag_launchpad_id(&id),
+                &ev::LaunchPadEvent::DroneActivated(ev::DroneActivatedEvent { id, drone }),
+            ))
+            .await
     }
 }
