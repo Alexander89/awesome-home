@@ -8,8 +8,8 @@ use actyx_sdk::{
 };
 use core::task::Waker;
 use futures::task::Context;
-use futures::task::Poll;
 use futures::StreamExt;
+use futures::{stream, task::Poll};
 use std::sync::Mutex;
 use std::thread::JoinHandle;
 use std::{fmt::Debug, sync::Arc};
@@ -21,7 +21,7 @@ use tokio_stream::Stream;
 use crate::twins::{combine_latest::combine_latest, switch_map::switch_map};
 
 pub trait Twin: Clone + Send + Sync {
-    type State: Default + Clone + Send + Sized + Sync + Unpin + 'static;
+    type State: Debug + Default + Clone + Send + Sized + Sync + Unpin + 'static;
 
     fn name(&self) -> String;
     fn id(&self) -> String;
@@ -153,7 +153,7 @@ where
 
 impl<S> TwinExecuter<S>
 where
-    S: Clone + Send + std::marker::Sync,
+    S: Debug + Clone + Send + std::marker::Sync + Unpin,
 {
     pub fn new(input: mpsc::Receiver<S>, debounce_time_ms: u64) -> Self {
         Self {
@@ -166,6 +166,25 @@ where
             next_trigger: None,
             waker: None,
         }
+    }
+
+    #[allow(dead_code)]
+    pub fn as_stream(self) -> impl Stream<Item = S> + Unpin {
+        let duration = Duration::from_millis(self.debounce_time_ms);
+        Box::pin(stream::unfold(self.input, move |mut input| async move {
+            let mut last_state = None;
+            loop {
+                let res = tokio::time::timeout(duration, input.recv()).await;
+                match res {
+                    Ok(Some(state)) => last_state = Some(state),
+                    _ => {
+                        if let Some(last) = last_state {
+                            break Some((last, input));
+                        }
+                    }
+                }
+            }
+        }))
     }
 }
 
@@ -291,41 +310,49 @@ where
     }
 }
 
-pub fn observe_registry<A, T, M, E, F>(
-    mut service: A,
+#[allow(dead_code)]
+pub fn resolve_registry<A, T, E>(
+    service: A,
     registry_twin: T,
-    map_to_entity: M,
-    state_changed: F,
-) -> Observation
+    map_to_entity: fn(T::State) -> Vec<E>,
+) -> impl Stream<Item = Vec<E::State>>
 where
     A: EventService + Clone + Sync + 'static,
     T: Twin + 'static, // Stream<Item = OS> + std::marker::Unpin + Send + 'static,
-    M: Fn(T::State) -> Vec<E> + Clone + Send + 'static,
     E: Twin + 'static,
-    F: Fn(Vec<E::State>) -> () + Send + Sync + 'static,
 {
-    let service = Arc::new(Mutex::new(service));
-    let mapper = Arc::new(Mutex::new(map_to_entity));
-
-    let stream = switch_map(
-        execute_twin(service.lock().unwrap().clone(), registry_twin),
-        {
-            let ser = service.clone();
-            let m = mapper.clone();
-            move |state| {
-                let l = combine_latest(
-                    (m.lock().unwrap())(state)
-                        .iter()
-                        .map(|entity| execute_twin(ser.lock().unwrap().clone(), entity.clone()))
-                        .collect(),
-                );
-                Some(l)
-            }
-        },
-    );
-    observe(stream, state_changed)
+    switch_map(execute_twin(service.clone(), registry_twin).as_stream(), {
+        move |state| {
+            let l = combine_latest(
+                (map_to_entity)(state)
+                    .iter()
+                    .map(|entity| execute_twin(service.clone(), entity.clone()).as_stream())
+                    .collect(),
+            );
+            Some(l)
+        }
+    })
 }
 
+#[allow(dead_code)]
+pub fn resolve_relation<A, T, E>(
+    service: A,
+    registry_twin: T,
+    map_to_entity: fn(T::State) -> Option<E>,
+) -> impl Stream<Item = E::State>
+where
+    A: EventService + Clone + Sync + 'static,
+    T: Twin + 'static, // Stream<Item = OS> + std::marker::Unpin + Send + 'static,
+    E: Twin + 'static,
+{
+    switch_map(
+        execute_twin(service.clone(), registry_twin).as_stream(),
+        move |state| {
+            let twin = (map_to_entity)(state);
+            twin.map(|e| execute_twin(service.clone(), e).as_stream())
+        },
+    )
+}
 pub struct Observation {
     command_sender: mpsc::Sender<bool>,
     handler: tokio::task::JoinHandle<()>,
