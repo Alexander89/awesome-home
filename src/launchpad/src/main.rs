@@ -1,3 +1,5 @@
+use crate::twin::observe_registry;
+use crate::twins::mission_twin::MissionRegistryTwin;
 use crate::twins::{
     launchpad_twin::LaunchpadTwin, mission_twin::MissionTwin, switch_map::switch_map,
 };
@@ -49,6 +51,26 @@ pub async fn main() -> anyhow::Result<()> {
                 .mission
                 .and_then(|id| Some(twin::execute_twin(service.clone(), MissionTwin { id })))
         },
+    );
+
+    let o = observe_registry(
+        service.clone(),
+        LaunchpadTwin {
+            id: "Launchpad-01".to_string(),
+        },
+        |s| {
+            s.mission
+                .and_then(|id| Some(vec![MissionTwin { id }]))
+                .unwrap_or_default()
+        },
+        |s| println!("state: {:?}", s),
+    );
+
+    let o = observe_registry(
+        service.clone(),
+        MissionRegistryTwin,
+        |s| s.into_iter().map(|id| MissionTwin { id }).collect(),
+        |s| println!("All missions: {:?}", s),
     );
 
     let res = current_mission.next().await;

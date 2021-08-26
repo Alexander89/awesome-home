@@ -65,6 +65,17 @@ async fn test_switch_map_combine_latest () {
         },
     );
 
-    let res = current_mission.next().await;
-    println!("All missions {:?}", res);
+    observe(
+        current_mission,
+        |states| println!("all_mission {:?}", states),
+    );
+}
+
+async fn test_observe_registry () {
+    let current_mission = observe_registry(
+        service.clone(),
+        MissionRegistryTwin,
+        |s| s.into_iter().map(|id| MissionTwin { id }).collect(),
+        |states| println!("all_mission {:?}", states),
+    );
 }

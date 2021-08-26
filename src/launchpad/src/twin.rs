@@ -18,8 +18,10 @@ use std::{thread::sleep, time::Duration};
 use tokio::sync::mpsc;
 use tokio_stream::Stream;
 
-pub trait Twin: Clone + Send {
-    type State: Default + Clone + Send + Sized + std::marker::Sync + 'static;
+use crate::twins::{combine_latest::combine_latest, switch_map::switch_map};
+
+pub trait Twin: Clone + Send + Sync {
+    type State: Default + Clone + Send + Sized + Sync + Unpin + 'static;
 
     fn name(&self) -> String;
     fn id(&self) -> String;
@@ -31,8 +33,8 @@ pub trait Twin: Clone + Send {
 #[allow(dead_code)]
 pub fn execute_twin<S, T>(event_service: S, twin: T) -> TwinExecuter<T::State>
 where
-    S: EventService + Send + std::marker::Sync + 'static,
-    T: Twin + Clone + std::marker::Sync + 'static,
+    S: EventService + Sync + 'static,
+    T: Twin + Sync + 'static,
 {
     let (tx, rx) = mpsc::channel::<T::State>(100);
     tokio::spawn(async move {
@@ -169,7 +171,7 @@ where
 
 impl<S> Stream for TwinExecuter<S>
 where
-    S: Debug + Unpin + Clone + Send + std::marker::Sync,
+    S: Unpin + Clone + Send + std::marker::Sync,
 {
     type Item = S;
 
@@ -259,7 +261,7 @@ where
 }
 
 #[allow(dead_code)]
-pub fn observe<T, S, F>(mut twin: T, func: F) -> Observation
+pub fn observe<T, S, F>(mut stream: T, state_changed: F) -> Observation
 where
     F: Fn(S) -> () + Send + 'static,
     S: Send,
@@ -269,9 +271,9 @@ where
     let handler = tokio::spawn(async move {
         'observeLaunchpad: loop {
             tokio::select! {
-                res = twin.next() => {
+                res = stream.next() => {
                     match res {
-                        Some(state) => func(state),
+                        Some(state) => state_changed(state),
                         None => break 'observeLaunchpad,
                     }
                 }
@@ -287,6 +289,41 @@ where
         command_sender,
         handler,
     }
+}
+
+pub fn observe_registry<A, T, M, E, F>(
+    mut service: A,
+    registry_twin: T,
+    map_to_entity: M,
+    state_changed: F,
+) -> Observation
+where
+    A: EventService + Clone + Sync + 'static,
+    T: Twin + 'static, // Stream<Item = OS> + std::marker::Unpin + Send + 'static,
+    M: Fn(T::State) -> Vec<E> + Clone + Send + 'static,
+    E: Twin + 'static,
+    F: Fn(Vec<E::State>) -> () + Send + Sync + 'static,
+{
+    let service = Arc::new(Mutex::new(service));
+    let mapper = Arc::new(Mutex::new(map_to_entity));
+
+    let stream = switch_map(
+        execute_twin(service.lock().unwrap().clone(), registry_twin),
+        {
+            let ser = service.clone();
+            let m = mapper.clone();
+            move |state| {
+                let l = combine_latest(
+                    (m.lock().unwrap())(state)
+                        .iter()
+                        .map(|entity| execute_twin(ser.lock().unwrap().clone(), entity.clone()))
+                        .collect(),
+                );
+                Some(l)
+            }
+        },
+    );
+    observe(stream, state_changed)
 }
 
 pub struct Observation {

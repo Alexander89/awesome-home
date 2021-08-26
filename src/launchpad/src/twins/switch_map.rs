@@ -17,11 +17,11 @@ pin_project! {
 }
 
 #[allow(dead_code)]
-pub fn switch_map<I, T, S, O, OI>(from: I, mapper: T) -> SwitchMap<I, T, O>
+pub fn switch_map<I, T, O>(from: I, mapper: T) -> SwitchMap<I, T, O>
 where
-    I: Stream<Item = S>,
-    T: Fn(S) -> Option<O> + Clone,
-    O: Stream<Item = OI>,
+    I: Stream,
+    T: Fn(I::Item) -> Option<O> + Clone,
+    O: Stream,
 {
     SwitchMap {
         from: from,
@@ -30,13 +30,13 @@ where
     }
 }
 
-impl<I, T, S, O, OI> Stream for SwitchMap<I, T, O>
+impl<I, T, O> Stream for SwitchMap<I, T, O>
 where
-    I: Stream<Item = S>,
-    T: Fn(S) -> Option<O> + Clone,
-    O: Stream<Item = OI>,
+    I: Stream,
+    T: Fn(I::Item) -> Option<O> + Clone,
+    O: Stream,
 {
-    type Item = OI;
+    type Item = O::Item;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let mut self_proj = self.project();
