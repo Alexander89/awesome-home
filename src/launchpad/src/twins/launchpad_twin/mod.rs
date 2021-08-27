@@ -6,7 +6,7 @@ use actyx_sdk::{Event, Payload, TagSet};
 
 pub mod events;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct LaunchpadTwinState {
     pub id: String,
     pub ready_to_launch: bool,

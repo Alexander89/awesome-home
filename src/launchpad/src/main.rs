@@ -1,8 +1,7 @@
 use std::borrow::Borrow;
 use std::time::Duration;
 
-use crate::twin::{resolve_registry, resolve_relation};
-use crate::twins::mission_twin::MissionRegistryTwin;
+use crate::twin::resolve_relation;
 use crate::twins::{launchpad_twin::LaunchpadTwin, mission_twin::MissionTwin};
 use actyx_sdk::{app_id, AppManifest, HttpClient};
 use tokio::select;
@@ -11,6 +10,7 @@ use tokio_stream::StreamExt;
 use url::Url;
 
 mod launchpad;
+mod stream_ops;
 mod twin;
 mod twins;
 

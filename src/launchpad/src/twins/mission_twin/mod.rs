@@ -6,7 +6,7 @@ use std::collections::HashSet;
 pub mod events;
 pub mod types;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct MissionTwinState {
     pub id: String,
     pub name: String,

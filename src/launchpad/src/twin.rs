@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use crate::stream_ops::StreamOpsExt;
 use actyx_sdk::{
     language::Query,
     service::{
@@ -7,22 +8,20 @@ use actyx_sdk::{
     },
     Event, EventKey, Metadata, OffsetMap, Payload, Tag, TagSet,
 };
-use core::task::Waker;
-use futures::task::Context;
 use futures::StreamExt;
-use futures::{stream, task::Poll};
-use std::thread::JoinHandle;
-use std::{fmt::Debug, sync::Arc};
-use std::{pin::Pin, thread, time::Instant};
-use std::{str::FromStr, sync::Mutex};
-use std::{thread::sleep, time::Duration};
+use std::{
+    fmt::Debug,
+    str::FromStr,
+    thread::sleep,
+    time::{Duration, Instant},
+};
 use tokio::sync::mpsc;
-use tokio_stream::Stream;
+use tokio_stream::{wrappers::ReceiverStream, Stream};
 
 use crate::twins::{combine_latest::combine_latest, switch_map::switch_map};
 
 pub trait Twin: Clone + Send + Sync {
-    type State: Debug + Default + Clone + Send + Sized + Sync + Unpin + 'static;
+    type State: Debug + Default + Clone + Send + Sized + Sync + Unpin + PartialEq + 'static;
 
     fn name(&self) -> String;
     fn id(&self) -> String;
@@ -93,8 +92,8 @@ where
 
 pub async fn current_state<S, T>(event_service: S, twin: T) -> Box<Result<T::State, anyhow::Error>>
 where
-    T: Twin + Clone + std::marker::Sync + 'static,
-    S: EventService + Send + std::marker::Sync + 'static,
+    T: Twin + Clone + Sync + 'static,
+    S: EventService + Send + Sync + 'static,
 {
     let event_stream = event_service
         .query(QueryRequest {
@@ -138,21 +137,17 @@ where
 #[derive(Debug)]
 pub struct TwinExecuter<S>
 where
-    S: Clone + Send + std::marker::Sync,
+    S: Clone + Send + Sync,
 {
     last_interaction: Instant,
     input: mpsc::Receiver<S>,
     last_state: Option<S>,
     debounce_time_ms: u64,
-
-    waker_thread: Arc<Mutex<Option<JoinHandle<()>>>>,
-    next_trigger: Option<Arc<Mutex<Instant>>>,
-    waker: Option<Arc<Mutex<Waker>>>,
 }
 
 impl<S> TwinExecuter<S>
 where
-    S: Debug + Clone + Send + std::marker::Sync + Unpin,
+    S: Debug + Clone + Send + Sync + Unpin + PartialEq,
 {
     pub fn new(input: mpsc::Receiver<S>, debounce_time_ms: u64) -> Self {
         Self {
@@ -160,37 +155,22 @@ where
             input,
             debounce_time_ms,
             last_state: None,
-
-            waker_thread: Arc::new(Mutex::new(None)),
-            next_trigger: None,
-            waker: None,
         }
     }
 
     pub fn as_stream(self) -> impl Stream<Item = S> + Unpin {
-        let duration = Duration::from_millis(self.debounce_time_ms);
-        Box::pin(stream::unfold(self.input, move |mut input| async move {
-            let mut last_state = None;
-            loop {
-                let res = tokio::time::timeout(duration, input.recv()).await;
-                match res {
-                    Ok(Some(state)) => last_state = Some(state),
-                    _ => {
-                        if let Some(last) = last_state {
-                            break Some((last, input));
-                        }
-                    }
-                }
-            }
-        }))
+        Box::pin(
+            ReceiverStream::new(self.input)
+                .debounce(Duration::from_millis(80))
+                .distinct_until_changed(),
+        )
     }
 }
 
-pub fn spawn_observer<T, S, F>(mut stream: T, state_changed: F) -> Observation
+pub fn spawn_observer<T, F>(mut stream: T, state_changed: F) -> Observation
 where
-    F: Fn(S) -> () + Send + 'static,
-    S: Send,
-    T: Stream<Item = S> + std::marker::Unpin + Send + 'static,
+    F: Fn(T::Item) -> () + Send + 'static,
+    T: Stream + Unpin + Send + 'static,
 {
     let (command_sender, mut tx) = tokio::sync::mpsc::channel(1);
     let handler = tokio::spawn(async move {
@@ -216,15 +196,15 @@ where
     }
 }
 
-pub fn resolve_registry<A, T, E>(
-    service: A,
-    registry_twin: T,
-    map_to_entity: fn(T::State) -> Vec<E>,
-) -> impl Stream<Item = Vec<E::State>>
+pub fn resolve_registry<Actyx, Registry, Entity>(
+    service: Actyx,
+    registry_twin: Registry,
+    map_to_entity: fn(Registry::State) -> Vec<Entity>,
+) -> impl Stream<Item = Vec<Entity::State>>
 where
-    A: EventService + Clone + Sync + 'static,
-    T: Twin + 'static, // Stream<Item = OS> + std::marker::Unpin + Send + 'static,
-    E: Twin + 'static,
+    Actyx: EventService + Clone + Sync + 'static,
+    Registry: Twin + 'static,
+    Entity: Twin + 'static,
 {
     switch_map(execute_twin(service.clone(), registry_twin).as_stream(), {
         move |state| {
@@ -246,7 +226,7 @@ pub fn resolve_relation<A, T, E>(
 ) -> impl Stream<Item = E::State>
 where
     A: EventService + Clone + Sync + 'static,
-    T: Twin + 'static, // Stream<Item = OS> + std::marker::Unpin + Send + 'static,
+    T: Twin + 'static, // Stream<Item = OS> + Unpin + Send + 'static,
     E: Twin + 'static,
 {
     switch_map(
