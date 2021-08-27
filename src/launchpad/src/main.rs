@@ -9,7 +9,11 @@ use tokio::time::sleep;
 use tokio_stream::StreamExt;
 use url::Url;
 
+#[cfg(feature = "hardware")]
 mod launchpad;
+#[cfg(feature = "hardware")]
+use crate::launchpad::enable_drone;
+
 mod twin;
 mod twins;
 
@@ -74,6 +78,8 @@ pub async fn main() -> anyhow::Result<()> {
             match (launchpad.mounted_drone.borrow(), launchpad.drone_enabled) {
                 (Some(mounted_drone), false) => {
                     println!("enable drone");
+                    #[cfg(feature = "hardware")]
+                    enable_drone().await;
                     sleep(Duration::from_millis(5000)).await;
 
                     LaunchpadTwin::emit_drone_activated(
