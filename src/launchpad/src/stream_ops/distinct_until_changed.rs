@@ -56,9 +56,9 @@ where
                 *me.last = Some(v.clone());
                 Poll::Ready(Some(v))
             }
-            Some(v) if me.last.is_some() && v != (*me.last).clone().unwrap() => {
-                *me.last = Some(v.clone());
-                Poll::Ready(Some(v))
+            value @ Some(_) if me.last.is_some() && value != *me.last => {
+                *me.last = value.clone();
+                Poll::Ready(value)
             }
             Some(_) => Poll::Pending,
             None => Poll::Ready(None),
