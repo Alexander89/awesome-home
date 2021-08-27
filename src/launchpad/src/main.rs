@@ -10,7 +10,6 @@ use tokio_stream::StreamExt;
 use url::Url;
 
 mod launchpad;
-mod stream_ops;
 mod twin;
 mod twins;
 

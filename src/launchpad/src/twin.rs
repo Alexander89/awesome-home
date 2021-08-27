@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-use crate::stream_ops::StreamOpsExt;
 use actyx_sdk::{
     language::Query,
     service::{
@@ -17,8 +16,7 @@ use std::{
 };
 use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, Stream};
-
-use crate::twins::{combine_latest::combine_latest, switch_map::switch_map};
+use tokio_stream_ext::{combine_latest, switch_map, StreamOpsExt};
 
 pub trait Twin: Clone + Send + Sync {
     type State: Debug + Default + Clone + Send + Sized + Sync + Unpin + PartialEq + 'static;
@@ -206,7 +204,8 @@ where
     Registry: Twin + 'static,
     Entity: Twin + 'static,
 {
-    switch_map(execute_twin(service.clone(), registry_twin).as_stream(), {
+    switch_map(
+        execute_twin(service.clone(), registry_twin).as_stream(),
         move |state| {
             let l = combine_latest(
                 (map_to_entity)(state)
@@ -215,8 +214,8 @@ where
                     .collect(),
             );
             Some(l)
-        }
-    })
+        },
+    )
 }
 
 pub fn resolve_relation<A, T, E>(
