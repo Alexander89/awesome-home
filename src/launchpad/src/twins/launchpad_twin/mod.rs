@@ -32,6 +32,12 @@ pub struct LaunchpadTwin {
     pub id: String,
 }
 
+impl LaunchpadTwin {
+    pub fn new(id: String) -> Self {
+        Self { id }
+    }
+}
+
 impl Twin for LaunchpadTwin {
     type State = LaunchpadTwinState;
     fn name(&self) -> String {

@@ -9,18 +9,21 @@ export type ReadyState = {
   state: 'ready'
   id: string
   ip: string
+  ssid: string
   battery: number
 }
 export type ConnectedState = {
   state: 'connected'
   id: string
   ip: string
+  ssid: string
   battery: number
 }
 export type LaunchedState = {
   state: 'launched'
   id: string
   ip: string
+  ssid: string
   missionId: string
   atWaypointId: number
   targetWaypointId?: number
@@ -30,6 +33,7 @@ export type UsedState = {
   state: 'used'
   id: string
   ip: string
+  ssid: string
   lastMissionId: string
   battery: number
 }
@@ -46,11 +50,15 @@ droneMissionCompleted(id: string, missionId: string)
 droneLanded(id: string, at: { x: number, y: number, z: number})
 droneDisconnected(id: string)
 */
-
+export type DroneDefinedEvent = {
+  eventType: 'droneDefined'
+  id: string
+  ssid: string
+  ip: string
+}
 export type DroneReadyEvent = {
   eventType: 'droneReady'
   id: string
-  ip: string
 }
 export type DroneConnectedEvent = {
   eventType: 'droneConnected'
@@ -93,6 +101,7 @@ export type DroneDisconnectedEvent = {
   id: string
 }
 export type DroneEvent =
+  | DroneDefinedEvent
   | DroneReadyEvent
   | DroneConnectedEvent
   | DroneStatsUpdatedEvent
@@ -103,8 +112,11 @@ export type DroneEvent =
   | DroneLandedEvent
   | DroneDisconnectedEvent
 
+const emitDroneDefined: Emitter<DroneDefinedEvent> = (emit, event) =>
+  emit(droneTag.withId(event.id).and(droneDefinedTag), { eventType: 'droneDefined', ...event })
+
 const emitDroneReady: Emitter<DroneReadyEvent> = (emit, event) =>
-  emit(droneTag.withId(event.id).and(droneReadyTag), { eventType: 'droneReady', ...event })
+  emit(droneTag.withId(event.id), { eventType: 'droneReady', ...event })
 
 const emitDroneConnected: Emitter<DroneConnectedEvent> = (emit, event) =>
   emit(droneTag.withId(event.id), { eventType: 'droneConnected', ...event })
@@ -137,7 +149,7 @@ const emitDroneDisconnected: Emitter<DroneDisconnectedEvent> = (emit, event) =>
   emit(droneTag.withId(event.id), { eventType: 'droneDisconnected', ...event })
 
 const droneTag = Tag<DroneEvent>('drone')
-const droneReadyTag = Tag<DroneReadyEvent>('drone.ready')
+const droneDefinedTag = Tag<DroneDefinedEvent>('drone.defined')
 const droneMissionStartedTag = Tag<DroneLaunchedEvent>('drone.mission.started')
 const droneMissionCompletedTag = Tag<DroneMissionCompletedEvent>('drone.mission.completed')
 
@@ -145,7 +157,7 @@ export const DroneTwins = {
   // Tags
   tags: {
     droneTag,
-    droneReadyTag,
+    droneDefinedTag,
     droneMissionStartedTag,
     droneMissionCompletedTag,
   },
@@ -155,32 +167,27 @@ export const DroneTwins = {
     initialState: { state: 'undefined', id },
     where: droneTag.withId(id),
     onEvent: (state, event) => {
-      if (event.eventType === 'droneStatsUpdated') {
-        if (state.state !== 'undefined') {
-          state.battery = event.battery
+      if (state.state === 'undefined') {
+        if (event.eventType === 'droneDefined') {
+          return {
+            state: 'ready',
+            id,
+            ip: event.ip,
+            ssid: event.ssid,
+            battery: 0,
+          }
         }
         return state
       }
 
-      switch (state.state) {
-        case 'undefined':
-          if (event.eventType === 'droneReady') {
-            return {
-              state: 'ready',
-              id,
-              ip: event.ip,
-              battery: 0,
-            }
-          } else {
-            console.log('Never reach: config event missing')
-          }
+      if (event.eventType === 'droneStatsUpdated') {
+        state.battery = event.battery
+        return state
+      }
 
-          break
+      switch (state.state) {
         case 'ready':
           switch (event.eventType) {
-            case 'droneReady':
-              state.ip = event.ip
-              return state
             case 'droneConnected':
               return {
                 ...state,
@@ -229,16 +236,18 @@ export const DroneTwins = {
               return {
                 state: 'used',
                 id,
-                battery: state.battery,
                 ip: state.ip,
+                ssid: state.ssid,
+                battery: state.battery,
                 lastMissionId: state.missionId,
               }
             case 'droneReady':
               return {
                 state: 'ready',
                 id,
-                battery: state.battery,
                 ip: state.ip,
+                ssid: state.ssid,
+                battery: state.battery,
               }
             default:
               console.log(`Never reach: ${event.eventType} in 'connected' state`)
@@ -262,10 +271,10 @@ export const DroneTwins = {
     },
   }),
 
-  all: (): Fish<Record<string, boolean>, DroneReadyEvent> => ({
+  all: (): Fish<Record<string, boolean>, DroneDefinedEvent> => ({
     fishId: FishId.of('com.awesome-home.drone.reg', 'all', 0),
     initialState: {},
-    where: droneReadyTag,
+    where: droneDefinedTag,
     onEvent: (state, event) => {
       state[event.id] = true
       return state
@@ -273,6 +282,7 @@ export const DroneTwins = {
   }),
 
   // Emitters
+  emitDroneDefined,
   emitDroneReady,
   emitDroneConnected,
   emitDroneStatsUpdated,

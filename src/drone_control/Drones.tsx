@@ -20,15 +20,19 @@ type Props = {
 export const Drones = ({ selectedDrone, onSelectedDroneChanged }: Props): JSX.Element => {
   const [droneName, setDroneName] = React.useState('')
   const [droneIp, setDroneIp] = React.useState('192.168.1.10')
+  const [droneSsid, setDroneSsid] = React.useState('TELLO-59FF95')
   const pond = usePond()
 
   const drones = useRegistryFish(DroneTwins.all(), Object.keys, DroneTwins.of).map((f) => f.state)
 
   const registerDrone = () => {
-    droneName && droneIp && DroneTwins.emitDroneReady(pond.emit, { id: droneName, ip: droneIp })
+    droneName &&
+      droneIp &&
+      droneSsid &&
+      DroneTwins.emitDroneDefined(pond.emit, { id: droneName, ip: droneIp, ssid: droneSsid })
   }
-  const droneReady = (id: string, ip: string) => () => {
-    DroneTwins.emitDroneReady(pond.emit, { id, ip })
+  const droneReady = (id: string) => () => {
+    DroneTwins.emitDroneReady(pond.emit, { id })
   }
 
   return (
@@ -59,7 +63,7 @@ export const Drones = ({ selectedDrone, onSelectedDroneChanged }: Props): JSX.El
             <Box style={{ flex: '1' }}>&nbsp;</Box>
 
             {state.state !== 'undefined' && state.state !== 'ready' && (
-              <Button variant="contained" color="info" onClick={droneReady(state.id, state.ip)}>
+              <Button variant="contained" color="info" onClick={droneReady(state.id)}>
                 ready
               </Button>
             )}
@@ -79,6 +83,14 @@ export const Drones = ({ selectedDrone, onSelectedDroneChanged }: Props): JSX.El
           value={droneIp}
           label="IP"
           onChange={({ target }) => setDroneIp(target.value)}
+        />
+      </CardActions>
+      <CardActions>
+        <TextField
+          id="drone-SSID"
+          value={droneSsid}
+          label="SSID"
+          onChange={({ target }) => setDroneSsid(target.value)}
         />
         <Button variant="contained" onClick={registerDrone}>
           add
