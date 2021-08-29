@@ -48,3 +48,14 @@ impl Default for DroneTwinState {
         })
     }
 }
+
+impl DroneTwinState {
+    pub fn id(&self) -> String {
+        match self {
+            DroneTwinState::Undefined(s) => s.id.to_owned(),
+            DroneTwinState::Ready(s) => s.id.to_owned(),
+            DroneTwinState::Launched(s) => s.id.to_owned(),
+            DroneTwinState::Used(s) => s.id.to_owned(),
+        }
+    }
+}
