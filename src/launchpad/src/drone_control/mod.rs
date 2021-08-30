@@ -1,7 +1,7 @@
 use std::{borrow::BorrowMut, time::Duration};
 
 use actyx_sdk::service::EventService;
-use tello::{command_mode::Position, CommandMode, Drone};
+use tello::{odometry::Odometry, CommandMode, Drone};
 use tokio::time::sleep;
 
 use crate::twins::{
@@ -46,7 +46,7 @@ impl DroneControl {
                 ..
             }) => {
                 if let Some(d) = self.drone.borrow_mut() {
-                    d.go_to(0, (*distance).round() as u32, *height as u32, 100)
+                    d.go_to(0, (*distance).round() as i32, *height as i32, 100)
                         .await
                         .map_err(anyhow::Error::msg)?
                 } else {
@@ -136,10 +136,10 @@ impl DroneControl {
         }
     }
 
-    pub fn pos(&self) -> Position {
+    pub fn pos(&self) -> Odometry {
         self.drone
-            .as_mut()
-            .map(|d| d.position.clone())
+            .as_ref()
+            .map(|d| d.odometry.clone())
             .unwrap_or_default()
     }
 }

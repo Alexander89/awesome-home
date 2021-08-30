@@ -1509,9 +1509,9 @@ dependencies = [
 
 [[package]]
 name = "tello"
-version = "0.4.1"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1d1bc3f4540f0b8561b21b78755dfbfdf2cfe5d56e94cdfc4b3795f28b1b5e4"
+checksum = "e7a81f59fd294f780efc4342220191bd023989dd70885d419bc29f5ae263d01b"
 dependencies = [
  "byteorder",
  "chrono",

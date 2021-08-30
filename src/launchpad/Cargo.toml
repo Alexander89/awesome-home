@@ -9,7 +9,7 @@ edition = "2018"
 # proc-macro = true
 
 [dependencies]
-tello = "0.4.1"
+tello = "0.5.1"
 actyx_sdk = { version = "0.2.1", features = ["client"]}
 futures = "0.3.16"
 url = "2.2.2"

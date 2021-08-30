@@ -8,6 +8,7 @@ use crate::twins::drone_twin::DroneTwin;
 use crate::twins::{launchpad_twin::LaunchpadTwin, mission_twin::MissionTwin};
 use actyx_sdk::service::EventService;
 use actyx_sdk::{app_id, AppManifest, HttpClient};
+use tello::odometry::Odometry;
 use tokio::select;
 use tokio::time::sleep;
 use tokio_stream::StreamExt;
@@ -64,6 +65,12 @@ pub async fn main() -> anyhow::Result<()> {
             new_drone = assigned_drone.next() => drone_state = new_drone,
             new_mission = current_mission.next() => mission_state = new_mission,
         }
+
+        println!("\n----------------------------------------");
+        println!("launchpad {:?}", launchpad_state);
+        println!("current mission {:?}", mission_state);
+        println!("--------");
+
         if let (Some(launchpad), Some(mission)) = (launchpad_state.borrow(), mission_state.borrow())
         {
             match (launchpad.drone_enabled, drone_state.borrow()) {
@@ -133,15 +140,7 @@ pub async fn main() -> anyhow::Result<()> {
                             id,
                             completed: true,
                             ..
-                        }) => {
-                            land_now(
-                                service.clone(),
-                                &mut drone,
-                                id.clone(),
-                                mission.id.to_owned(),
-                            )
-                            .await?
-                        }
+                        }) => land_now(service.clone(), &mut drone, id.clone()).await?,
                         DroneTwinState::Launched(_) => {
                             println!("wait for next task")
                         }
@@ -154,11 +153,7 @@ pub async fn main() -> anyhow::Result<()> {
                 _ => (),
             }
         }
-
-        println!("--------\n");
-        println!("launchpad {:?}", launchpad_state);
-        println!("current mission {:?}", mission_state);
-        println!("--------\n");
+        println!("----------------------------------------\n");
     }
 }
 
@@ -227,15 +222,16 @@ async fn land_now(
     service: impl EventService,
     drone: &mut DroneControl,
     id: String,
-    mission_id: String,
 ) -> Result<(), anyhow::Error> {
     println!("connect drone {}", id);
     if let Ok(_) = drone.land().await {
+        let Odometry { x, y, z, .. } = drone.pos();
         DroneTwin::emit_drone_landed(
             service.clone(),
             "Launchpad-01".to_string(),
-            id.to_owned(),
-            mission_id,
+            x as f32,
+            y as f32,
+            z as f32,
         )
         .await?;
     } else {
