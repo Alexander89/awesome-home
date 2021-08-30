@@ -17,15 +17,22 @@ impl DroneControl {
     pub fn new() -> Self {
         Self { drone: None }
     }
-    pub async fn connect(&mut self, _ssid: String, ip: String) -> Result<(), String> {
+
+    pub fn is_drone_connected(&self) -> bool {
+        self.drone.as_ref().is_some()
+    }
+
+    pub async fn connect(&mut self, ip: String) -> Result<(), String> {
         let drone = Drone::new(&*ip).command_mode();
-        drone.enable().await?;
+        // this always fails
+        let _res = drone.enable().await;
         self.drone = Some(drone);
         Ok(())
     }
     pub async fn take_off(&mut self) -> Result<(), String> {
         if let Some(drone) = self.drone.as_ref() {
-            drone.take_off().await
+            drone.take_off().await?;
+            Ok(())
         } else {
             Err("no drone connected".to_string())
         }
@@ -46,7 +53,9 @@ impl DroneControl {
                 ..
             }) => {
                 if let Some(d) = self.drone.borrow_mut() {
-                    d.go_to(0, (*distance).round() as i32, *height as i32, 100)
+                    let target_height = *height as i32;
+                    let z = target_height - d.odometry.z.round() as i32;
+                    d.go_to(0, (*distance).round() as i32, z, 100)
                         .await
                         .map_err(anyhow::Error::msg)?
                 } else {
@@ -106,15 +115,15 @@ impl DroneControl {
                 .map(|_| ())
             }
             Waypoint::Delay(DelayWaypoint { id, duration, .. }) => {
-                let _ = tokio::join!(
-                    DroneTwin::emit_drone_started_to_next_waypoint(
-                        service.clone(),
-                        drone_id.clone(),
-                        mission_id.clone(),
-                        *id,
-                    ),
-                    sleep(Duration::from_secs_f32(duration / 1000.0))
-                );
+                DroneTwin::emit_drone_started_to_next_waypoint(
+                    service.clone(),
+                    drone_id.clone(),
+                    mission_id.clone(),
+                    *id,
+                )
+                .await?;
+
+                sleep(Duration::from_secs_f32(duration / 1000.0)).await;
 
                 DroneTwin::emit_drone_arrived_at_waypoint(
                     service.clone(),
@@ -130,7 +139,8 @@ impl DroneControl {
 
     pub async fn land(&mut self) -> Result<(), String> {
         if let Some(drone) = self.drone.as_ref() {
-            drone.land().await
+            drone.land().await?;
+            Ok(())
         } else {
             Err("can't land !?".to_string())
         }

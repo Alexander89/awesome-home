@@ -23,6 +23,11 @@ pin-project-lite = "0.2.7"
 serde_json = "1.0.66"
 tokio-stream-ext = "0.1.4"
 syn = { version="1.0.75", features=["extra-traits"]}
+wifi-rs = { version = "0.2.2", optional = true  }
+wifiscanner = { version = "0.5.*", optional = true  }
+pnet_datalink = { version = "0.28.0", optional = true  }
 
 [features]
+productive = ["hardware", "wifi"]
 hardware = ["rppal"]
+wifi = ["wifiscanner", "wifi-rs", "pnet_datalink"]
