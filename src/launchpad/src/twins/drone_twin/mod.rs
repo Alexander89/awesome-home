@@ -19,19 +19,19 @@ pub struct DroneTwin {
 impl Twin for DroneTwin {
     type State = states::DroneTwinState;
     fn name(&self) -> String {
-        "launchpad".to_string()
+        "drone".to_string()
     }
     fn id(&self) -> String {
         self.id.clone()
     }
     fn query(&self) -> actyx_sdk::language::Query {
-        format!("FROM 'launchpad:{}'", self.id)
+        format!("FROM 'drone:{}'", self.id)
             .parse()
             .expect("DroneTwin: AQL query not parse-able")
     }
 
     fn reducer(state: Self::State, event: Event<Payload>) -> Self::State {
-        //println!("{:?}", event.payload.json_value());
+        println!("droneEvent {:?}", event.payload.json_value());
         if let Ok(ev) = event.extract::<ev::DroneEvent>() {
             match ev.payload {
                 ev::DroneEvent::DroneDefined(e) => {

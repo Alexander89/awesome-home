@@ -198,7 +198,7 @@ pub fn resolve_registry<Actyx, Registry, Entity>(
     service: Actyx,
     registry_twin: Registry,
     map_to_entity: fn(Registry::State) -> Vec<Entity>,
-) -> impl Stream<Item = Vec<Entity::State>>
+) -> impl Stream<Item = Vec<Entity::State>> + Unpin
 where
     Actyx: EventService + Clone + Sync + 'static,
     Registry: Twin + 'static,
@@ -218,15 +218,15 @@ where
     )
 }
 
-pub fn resolve_relation<A, T, E>(
-    service: A,
-    registry_twin: T,
-    map_to_entity: fn(T::State) -> Option<E>,
-) -> impl Stream<Item = E::State>
+pub fn resolve_relation<Actyx, From, Entity>(
+    service: Actyx,
+    registry_twin: From,
+    map_to_entity: fn(From::State) -> Option<Entity>,
+) -> impl Stream<Item = Entity::State> + Unpin
 where
-    A: EventService + Clone + Sync + 'static,
-    T: Twin + 'static, // Stream<Item = OS> + Unpin + Send + 'static,
-    E: Twin + 'static,
+    Actyx: EventService + Clone + Sync + 'static,
+    From: Twin + 'static,
+    Entity: Twin + 'static,
 {
     switch_map(
         execute_twin(service.clone(), registry_twin).as_stream(),
@@ -236,6 +236,7 @@ where
         },
     )
 }
+
 pub struct Observation {
     command_sender: mpsc::Sender<bool>,
     handler: tokio::task::JoinHandle<()>,

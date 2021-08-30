@@ -12,6 +12,7 @@ use tello::odometry::Odometry;
 use tokio::select;
 use tokio::time::sleep;
 use tokio_stream::StreamExt;
+use twins::launchpad_twin::LaunchpadTwinState;
 use twins::mission_twin::MissionTwinState;
 use url::Url;
 
@@ -68,6 +69,7 @@ pub async fn main() -> anyhow::Result<()> {
 
         println!("\n----------------------------------------");
         println!("launchpad {:?}", launchpad_state);
+        println!("drone state {:?}", drone_state);
         println!("current mission {:?}", mission_state);
         println!("--------");
 
@@ -75,7 +77,7 @@ pub async fn main() -> anyhow::Result<()> {
         {
             match (launchpad.drone_enabled, drone_state.borrow()) {
                 (false, Some(drone_state)) => {
-                    println!("enable drone");
+                    println!("enable drone {:?}", drone_state);
                     #[cfg(feature = "hardware")]
                     enable_drone().await;
                     #[cfg(not(feature = "hardware"))]
