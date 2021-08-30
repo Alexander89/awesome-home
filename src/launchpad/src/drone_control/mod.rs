@@ -1,7 +1,7 @@
 use std::{borrow::BorrowMut, time::Duration};
 
 use actyx_sdk::service::EventService;
-use tello::{CommandMode, Drone};
+use tello::{command_mode::Position, CommandMode, Drone};
 use tokio::time::sleep;
 
 use crate::twins::{
@@ -126,5 +126,20 @@ impl DroneControl {
                 .map(|_| ())
             }
         }
+    }
+
+    pub async fn land(&mut self) -> Result<(), String> {
+        if let Some(drone) = self.drone.as_ref() {
+            drone.land().await
+        } else {
+            Err("can't land !?".to_string())
+        }
+    }
+
+    pub fn pos(&self) -> Position {
+        self.drone
+            .as_mut()
+            .map(|d| d.position.clone())
+            .unwrap_or_default()
     }
 }

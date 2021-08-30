@@ -117,6 +117,7 @@ pub async fn main() -> anyhow::Result<()> {
                             id,
                             at_waypoint_id,
                             target_waypoint_id: None,
+                            completed: false,
                             ..
                         }) => {
                             exec_waypoint(
@@ -127,6 +128,19 @@ pub async fn main() -> anyhow::Result<()> {
                                 &mission,
                             )
                             .await?;
+                        }
+                        DroneTwinState::Launched(LaunchedState {
+                            id,
+                            completed: true,
+                            ..
+                        }) => {
+                            land_now(
+                                service.clone(),
+                                &mut drone,
+                                id.clone(),
+                                mission.id.to_owned(),
+                            )
+                            .await?
                         }
                         DroneTwinState::Launched(_) => {
                             println!("wait for next task")
@@ -207,4 +221,26 @@ async fn exec_waypoint(
             .await
             .map(|_| ())
     }
+}
+
+async fn land_now(
+    service: impl EventService,
+    drone: &mut DroneControl,
+    id: String,
+    mission_id: String,
+) -> Result<(), anyhow::Error> {
+    println!("connect drone {}", id);
+    if let Ok(_) = drone.land().await {
+        DroneTwin::emit_drone_landed(
+            service.clone(),
+            "Launchpad-01".to_string(),
+            id.to_owned(),
+            mission_id,
+        )
+        .await?;
+    } else {
+        println!("failed to start drone");
+        sleep(Duration::from_millis(5000)).await;
+    }
+    Ok(())
 }
