@@ -13,10 +13,13 @@ import {
   CardActions,
   Button,
   TextField,
+  Paper,
 } from '@material-ui/core'
 import { LaunchPadTwins } from '../fish/LaunchpadTwin'
 import { DefinedState, MissionTwins } from '../fish/MissionTwin'
 import { useRegistryFish } from '@actyx-contrib/react-pond'
+import { DroneTwins } from '../fish/DroneTwin'
+import './LaunchPad.css'
 
 type Props = {
   onSelectionChanged: (id: string | undefined) => void
@@ -63,6 +66,14 @@ export const LaunchPad = ({
   const registerLaunchpad = () => {
     launchpadName && LaunchPadTwins.emitLaunchPadRegistered(pond.emit, { id: launchpadName })
   }
+  const dropMission = (id: string, missionId: string) => {
+    id &&
+      missionId &&
+      DroneTwins.emitDroneMissionCompleted(pond.emit, {
+        id,
+        missionId,
+      })
+  }
 
   return (
     <Card style={{ margin: '0px 12px 12px 0px' }}>
@@ -107,25 +118,46 @@ export const LaunchPad = ({
             )}
             {!!launchpadMissionLog && (
               <Box>
-                <Box>
-                  <Box>Next missions</Box>
-                  <Box>{launchpadMissionLog.state.nextMissions.join(', ')}</Box>
-                </Box>
-                {launchpadMissionLog.state.currentMission && (
+                <Paper className="MissionInfo">
+                  <Box className="MissionInfoHeader">Next missions</Box>
                   <Box>
-                    <Box>Current mission</Box>
+                    {launchpadMissionLog.state.nextMissions.map((m) => (
+                      <Box>
+                        {m}
+                        {selectedDrone && (
+                          <button onClick={() => dropMission(selectedDrone, m)}>drop</button>
+                        )}
+                      </Box>
+                    ))}
+                  </Box>
+                </Paper>
+                {launchpadMissionLog.state.currentMission && (
+                  <Paper className="MissionInfo">
+                    <Box className="MissionInfoHeader">Current mission</Box>
                     <Box>{launchpadMissionLog.state.currentMission.id}</Box>
                     <Box>{launchpadMissionLog.state.currentMission.assignedDrone}</Box>
-                  </Box>
+                    <a
+                      onClick={() =>
+                        dropMission(
+                          launchpadMissionLog.state.currentMission?.assignedDrone || '',
+                          launchpadMissionLog.state.currentMission?.id || '',
+                        )
+                      }
+                    >
+                      drop
+                    </a>
+                  </Paper>
                 )}
-                <Box>
-                  <Box>Completed missions</Box>
+                <Paper className="MissionInfo">
+                  <Box className="MissionInfoHeader">Completed missions</Box>
                   <Box>
-                    {launchpadMissionLog.state.completedMissions
-                      .map((m) => `${m.ts.toLocaleTimeString()} : ${m.missionId} - ${m.drone}`)
-                      .join(', ')}
+                    {launchpadMissionLog.state.completedMissions.map((m) => (
+                      <Box>
+                        {new Date(m.ts).toLocaleTimeString()}: {m.missionId} - {m.drone}{' '}
+                      </Box>
+                    ))}
                   </Box>
-                </Box>
+                </Paper>
               </Box>
             )}
           </CardContent>

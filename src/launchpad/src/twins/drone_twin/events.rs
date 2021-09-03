@@ -18,6 +18,12 @@ pub struct DroneDefinedEvent {
 pub struct DroneReadyEvent {
     pub id: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DroneActivatedEvent {
+    pub id: String,
+    pub launchpad_id: String,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DroneConnectedEvent {
     pub id: String,
@@ -65,6 +71,7 @@ pub struct DroneDisconnectedEvent {
 pub enum DroneEvent {
     DroneDefined(DroneDefinedEvent),
     DroneReady(DroneReadyEvent),
+    DroneActivated(DroneActivatedEvent),
     DroneConnected(DroneConnectedEvent),
     DroneStatsUpdated(DroneStatsUpdatedEvent),
     DroneLaunched(DroneLaunchedEvent),

@@ -19,7 +19,7 @@ type Props = {
 
 export const Drones = ({ selectedDrone, onSelectedDroneChanged }: Props): JSX.Element => {
   const [droneName, setDroneName] = React.useState('')
-  const [droneIp, setDroneIp] = React.useState('192.168.1.10')
+  const [droneIp, setDroneIp] = React.useState('192.168.10.1')
   const [droneSsid, setDroneSsid] = React.useState('TELLO-59FF95')
   const pond = usePond()
 
@@ -40,34 +40,39 @@ export const Drones = ({ selectedDrone, onSelectedDroneChanged }: Props): JSX.El
       <CardHeader title={<Typography variant="h5">Drones</Typography>} />
       <CardContent>
         {drones.map((state) => (
-          <Box
-            key={state.id}
-            onClick={() => onSelectedDroneChanged(state.id)}
-            style={{
-              padding: 6,
-              backgroundColor: selectedDrone === state.id ? '#C0C0C0' : 'white',
-              display: 'flex',
-              alignItems: 'center',
-              borderRadius: 4,
-              margin: 4,
-              cursor: 'pointer',
-              boxShadow:
-                selectedDrone === state.id
-                  ? '0px 2px 4px -1px rgb(0 0 0 / 20%), 0px 4px 5px 0px rgb(0 0 0 / 14%), 0px 1px 10px 0px rgb(0 0 0 / 12%)'
-                  : '',
-            }}
-          >
-            <Box>
-              {state.id} - {state.state}
-            </Box>
-            <Box style={{ flex: '1' }}>&nbsp;</Box>
+          <>
+            <Box
+              key={state.id}
+              onClick={() => onSelectedDroneChanged(state.id)}
+              style={{
+                padding: 6,
+                backgroundColor: selectedDrone === state.id ? '#C0C0C0' : 'white',
+                display: 'flex',
+                alignItems: 'center',
+                borderRadius: 4,
+                margin: 4,
+                cursor: 'pointer',
+                boxShadow:
+                  selectedDrone === state.id
+                    ? '0px 2px 4px -1px rgb(0 0 0 / 20%), 0px 4px 5px 0px rgb(0 0 0 / 14%), 0px 1px 10px 0px rgb(0 0 0 / 12%)'
+                    : '',
+              }}
+            >
+              <Box>
+                {state.id} - {state.state}
+              </Box>
+              <Box style={{ flex: '1' }}>&nbsp;</Box>
 
-            {state.state !== 'undefined' && state.state !== 'ready' && (
-              <Button variant="contained" color="info" onClick={droneReady(state.id)}>
-                ready
-              </Button>
-            )}
-          </Box>
+              {state.state !== 'undefined' && (
+                <Button variant="contained" color="info" onClick={droneReady(state.id)}>
+                  ready
+                </Button>
+              )}
+            </Box>
+            <Box>
+              <pre>{JSON.stringify(state, undefined, 2)}</pre>
+            </Box>
+          </>
         ))}
       </CardContent>
 

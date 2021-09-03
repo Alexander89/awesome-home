@@ -200,9 +200,12 @@ export const LaunchPadTwins = {
           }
           return state
         case 'droneMissionCompleted':
+          state.nextMissions = state.nextMissions.filter((s) => s !== event.missionId)
+          console.log(state.currentMission, event.missionId)
           if (state.currentMission?.id === event.missionId) {
             state.currentMission = undefined
           }
+
           state.completedMissions.push({
             drone: event.id,
             missionId: event.missionId,

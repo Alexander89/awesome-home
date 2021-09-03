@@ -1,38 +1,41 @@
-use crate::drone_control::DroneControl;
-#[cfg(feature = "wifi")]
-use crate::network::Network;
-use crate::twin::{self, resolve_relation};
-use crate::twins::drone_twin::states::{DroneTwinState, LaunchedState, ReadyState};
-use crate::twins::drone_twin::DroneTwin;
-use crate::twins::launchpad_twin::LaunchpadTwinState;
-use crate::twins::mission_twin::MissionTwinState;
-use crate::twins::{launchpad_twin::LaunchpadTwin, mission_twin::MissionTwin};
+use crate::{
+    hardware::Hardware,
+    twin::{self, resolve_relation},
+    twins::{
+        drone_twin::{
+            states::{DroneTwinState, LaunchedState, ReadyState},
+            DroneTwin,
+        },
+        launchpad_twin::{LaunchpadTwin, LaunchpadTwinState},
+        mission_twin::{MissionTwin, MissionTwinState},
+    },
+};
 use actyx_sdk::HttpClient;
 use futures::Stream;
-use std::borrow::Borrow;
 use std::time::Duration;
-use tello::odometry::Odometry;
-use tokio::select;
-use tokio::time::sleep;
+use tokio::{select, sync::mpsc, time::interval};
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
-
-#[cfg(feature = "hardware")]
-mod launchpad;
-#[cfg(feature = "hardware")]
-use crate::launchpad::enable_drone;
+use tokio_stream_ext::StreamOpsExt;
 
 pub struct Controller {
     name: String,
     service: HttpClient,
-    drone: DroneControl,
+    hardware: Hardware,
+}
+#[derive(Clone, Debug)]
+struct AppState {
+    pub launchpad: LaunchpadTwinState,
+    pub drone: Option<DroneTwinState>,
+    pub mission: Option<MissionTwinState>,
 }
 
 impl Controller {
     pub fn new(name: String, service: HttpClient) -> Self {
         Self {
             name,
+            hardware: Hardware::new(service.clone()),
             service,
-            drone: DroneControl::new(),
         }
     }
     fn service(&self) -> HttpClient {
@@ -50,10 +53,10 @@ impl Controller {
             twin::execute_twin(self.service(), launchpad_twin.clone()).as_stream();
 
         let current_mission = resolve_relation(self.service(), launchpad_twin.clone(), |s| {
-            s.mission.map(|id| MissionTwin { id })
+            s.current_mission.map(|id| MissionTwin { id })
         });
         let assigned_drone = resolve_relation(self.service(), launchpad_twin.clone(), |s| {
-            s.mounted_drone.map(|id| DroneTwin { id })
+            s.attached_drone.map(|id| DroneTwin { id })
         });
 
         let res = self
@@ -73,193 +76,168 @@ impl Controller {
         let mut drone_state = None;
         let mut mission_state = None;
 
+        let mut state_read = interval(Duration::from_millis(1000));
+        let (tx, rx) = mpsc::channel::<AppState>(3);
+
+        let mut state_update =
+            Box::pin(ReceiverStream::new(rx).debounce(Duration::from_millis(200)));
+
         loop {
             select! {
-                new_launchpad = launchpad_stream.next() => launchpad_state = new_launchpad,
-                new_drone = assigned_drone.next() => drone_state = new_drone,
-                new_mission = current_mission.next() => mission_state = new_mission,
-            }
-
-            println!("\n----------------------------------------");
-            println!("launchpad {:?}", launchpad_state);
-            println!("drone state {:?}", drone_state);
-            println!("current mission {:?}", mission_state);
-            println!("--------");
-
-            if let (Some(launchpad), Some(mission)) =
-                (launchpad_state.borrow(), mission_state.borrow())
-            {
-                match (launchpad.drone_enabled, drone_state.borrow()) {
-                    (false, Some(drone_state)) => {
-                        println!("enable drone {:?}", drone_state);
-                        #[cfg(feature = "hardware")]
-                        enable_drone().await;
-                        #[cfg(not(feature = "hardware"))]
-                        sleep(Duration::from_millis(5000)).await;
-
-                        LaunchpadTwin::emit_drone_activated(
-                            self.service(),
-                            self.name(),
-                            drone_state.id(),
-                        )
-                        .await?;
+                _ = state_read.tick() => {
+                    drone_state.as_ref().map(|s| self.update_states(s));
+                },
+                new_launchpad = launchpad_stream.next() => {
+                    launchpad_state = new_launchpad;
+                    let _ = tx.send(AppState {
+                        drone: drone_state.clone(),
+                        launchpad: launchpad_state.clone().unwrap(),
+                        mission: mission_state.clone(),
+                    }).await;
+                },
+                new_drone = assigned_drone.next() =>{
+                    drone_state = new_drone;
+                    if let Some(launchpad) = launchpad_state.clone() {
+                        let _ = tx.send(AppState {
+                            drone: drone_state.clone(),
+                            launchpad,
+                            mission: mission_state.clone(),
+                        }).await;
                     }
-                    (true, Some(drone_state)) => match drone_state {
-                        DroneTwinState::Undefined(_) => {
-                            println!("FU: Starting an undefined drone!? NO!")
-                        }
-                        DroneTwinState::Ready(ReadyState {
-                            id,
-                            ssid,
-                            ip,
-                            connected,
-                            ..
-                        }) => {
-                            if !connected {
-                                self.connect_now(id.clone(), ssid.clone(), ip.clone())
-                                    .await?
-                            } else {
-                                self.take_off_now(
-                                    id.clone(),
-                                    ssid.clone(),
-                                    ip.clone(),
-                                    mission.id.to_owned(),
-                                )
-                                .await?
-                            }
-                        }
-                        DroneTwinState::Launched(LaunchedState {
-                            id,
-                            at_waypoint_id,
-                            target_waypoint_id: None,
-                            completed: false,
-                            ..
-                        }) => {
-                            self.exec_waypoint(id.to_owned(), *at_waypoint_id as usize, &mission)
-                                .await?;
-                        }
-                        DroneTwinState::Launched(LaunchedState {
-                            id,
-                            completed: true,
-                            ..
-                        }) => self.land_now(id.clone()).await?,
-                        DroneTwinState::Launched(_) => {
-                            println!("wait for next task")
-                        }
-                        DroneTwinState::Used(_) => {
-                            println!("FU do nothing when already in used state")
-                        }
-                    },
-                    _ => (),
+                },
+                new_mission = current_mission.next() => {
+                    mission_state = new_mission;
+                    if let Some(launchpad) = launchpad_state.clone() {
+                        let _ = tx.send(AppState {
+                            drone: drone_state.clone(),
+                            launchpad,
+                            mission: mission_state.clone(),
+                        }).await;
+                    }
+                },
+                Some(app_state) = state_update.next() => {
+                    if let Err(e) = self.handler(app_state.clone()).await {
+                        println!("Something is wrong {:?}", e);
+                    };
+                },
+
+            }
+        }
+    }
+    async fn update_states(&mut self, drone_state: &DroneTwinState) -> Result<(), anyhow::Error> {
+        println!("update_states");
+        if let Ok(s) = self.hardware.get_state() {
+            let (battery, id) = match drone_state {
+                DroneTwinState::Undefined(_) => return Ok(()),
+                DroneTwinState::Ready(e) => (e.battery, e.id.to_owned()),
+                DroneTwinState::Launched(e) => (e.battery, e.id.to_owned()),
+                DroneTwinState::Used(e) => (e.battery, e.id.to_owned()),
+            };
+
+            println!("battery {} <-> new {}", battery, s.bat);
+
+            if (battery as i8 - s.bat).abs() >= 5 {
+                println!("update battery values {:?}", s.bat);
+                DroneTwin::emit_drone_stats_updated(self.service(), id, s.bat as u8).await?;
+            }
+        };
+        Ok(())
+    }
+
+    async fn handler(&mut self, app_state: AppState) -> Result<(), anyhow::Error> {
+        let launchpad_state = app_state.launchpad;
+        let mission_state = app_state.mission;
+        let drone_state = app_state.drone;
+
+        if let (Some(drone_state), Some(mission)) = (drone_state, mission_state) {
+            match drone_state {
+                DroneTwinState::Undefined(_) => {
+                    println!("FU: Starting an undefined drone!? NO!")
+                }
+                // drone is defined
+                DroneTwinState::Ready(ref d @ ReadyState { .. }) if !d.is_enabled() => {
+                    println!("enable drone");
+                    self.hardware.enable_drone().await;
+                    DroneTwin::emit_drone_activated(self.service(), d.id.to_owned(), self.name())
+                        .await?;
+                }
+                // drone is enabled
+                DroneTwinState::Ready(ReadyState {
+                    id,
+                    ssid,
+                    ip,
+                    connected: false,
+                    ..
+                }) => {
+                    println!("connect to drone now");
+                    self.hardware
+                        .connect_now(id.clone(), ssid.clone(), ip.clone())
+                        .await?
+                }
+                // drone is enabled / and connected
+                DroneTwinState::Ready(ReadyState {
+                    id,
+                    ssid,
+                    ip,
+                    connected: true,
+                    ..
+                }) => {
+                    self.hardware
+                        .take_off_now(id.clone(), ssid.clone(), ip.clone(), mission.id.to_owned())
+                        .await?
+                }
+                // drone is in the air and the current mission is *not* completed an currently not moving to the next waypoint
+                DroneTwinState::Launched(LaunchedState {
+                    id,
+                    at_waypoint_id,
+                    target_waypoint_id: None,
+                    completed: false,
+                    ..
+                }) => {
+                    self.hardware
+                        .exec_waypoint(id.to_owned(), at_waypoint_id as usize, &mission)
+                        .await?;
+                }
+                // Mission completed land now!
+                DroneTwinState::Launched(LaunchedState {
+                    id,
+                    completed: true,
+                    ..
+                }) => {
+                    self.hardware.land_now(id.clone()).await?;
+                    DroneTwin::emit_drone_mission_completed(self.service(), id, mission.id.clone())
+                        .await?;
+                }
+                // drone is on the way to the next waypoint, and wait that the drone arrives on the next Waypoint
+                DroneTwinState::Launched(LaunchedState {
+                    id,
+                    mission_id,
+                    target_waypoint_id: Some(next_wp),
+                    completed: false,
+                    ..
+                }) => {
+                    println!(
+                        "Drone {} is on the way to {} for mission {}",
+                        id, next_wp, mission_id
+                    );
+                }
+                DroneTwinState::Used(_) => {
+                    println!("FU do nothing when already in used state")
                 }
             }
-            println!("----------------------------------------\n");
-        }
-    }
-}
-
-impl Controller {
-    async fn connect_now(
-        &mut self,
-        id: String,
-        ssid: String,
-        ip: String,
-    ) -> Result<(), anyhow::Error> {
-        println!("connect to drone now {} {} {}", id, ssid, ip);
-        #[cfg(feature = "wifi")]
-        {
-            println!("activate drone {}", id);
-            Network::connect(ssid).await?;
-        }
-
-        let ip = if !ip.contains(':') {
-            format!("{}:8889", ip)
         } else {
-            ip
-        };
-
-        match self.drone.connect(ip).await {
-            Ok(()) => {
-                DroneTwin::emit_drone_connected(self.service(), id)
-                    .await
-                    .map(|_| ())?;
-            }
-            Err(e) => {
-                println!("failed to connect to drone {}", e);
-                sleep(Duration::from_millis(5000)).await;
-            }
-        }
-        Ok(())
-    }
-
-    async fn take_off_now(
-        &mut self,
-        id: String,
-        ssid: String,
-        ip: String,
-        mission_id: String,
-    ) -> Result<(), anyhow::Error> {
-        println!("connect drone {}", id);
-        if self.drone.is_drone_connected() == false {
-            self.connect_now(id.to_owned(), ssid, ip).await?;
-        }
-
-        match self.drone.take_off().await {
-            Ok(_) => {
-                LaunchpadTwin::emit_drone_started(
+            if let Some(next_mission) = launchpad_state.mission_queue.first() {
+                println!("Activate next mission {}", next_mission);
+                LaunchpadTwin::emit_mission_activated(
                     self.service(),
-                    "Launchpad-01".to_string(),
-                    id.to_owned(),
-                    mission_id,
+                    self.name(),
+                    next_mission.to_owned(),
                 )
                 .await?;
             }
-            Err(e) => {
-                println!("failed to start drone {}", e);
-                sleep(Duration::from_millis(5000)).await;
-            }
         }
-        Ok(())
-    }
 
-    async fn exec_waypoint(
-        &mut self,
-        drone_id: String,
-        current_wp_id: usize,
-        mission: &MissionTwinState,
-    ) -> Result<(), anyhow::Error> {
-        let next_wp = current_wp_id + 1;
-        if let Some(wp) = mission.waypoints.get(next_wp) {
-            println!("exec waypoint {}", next_wp);
-            self.drone
-                .exec_waypoint(self.service(), drone_id, mission.id.clone(), wp)
-                .await
-        } else {
-            DroneTwin::emit_drone_mission_completed(self.service(), drone_id, mission.id.clone())
-                .await
-                .map(|_| ())
-        }
-    }
-
-    async fn land_now(&mut self, id: String) -> Result<(), anyhow::Error> {
-        println!("land drone {}", id);
-        match self.drone.land().await {
-            Ok(_) => {
-                let Odometry { x, y, z, .. } = self.drone.pos();
-                DroneTwin::emit_drone_landed(
-                    self.service(),
-                    "Launchpad-01".to_string(),
-                    x as f32,
-                    y as f32,
-                    z as f32,
-                )
-                .await?;
-            }
-            Err(e) => {
-                println!("failed to land drone {}", e);
-                sleep(Duration::from_millis(5000)).await;
-            }
-        }
+        println!("----------------------------------------\n");
         Ok(())
     }
 }

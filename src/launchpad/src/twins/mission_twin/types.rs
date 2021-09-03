@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct GoToWaypoint {
-    pub id: i32,
     pub map_x: f32,
     pub map_y: f32,
     pub height: i16,
@@ -15,7 +14,6 @@ pub struct GoToWaypoint {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct TurnWaypoint {
-    pub id: i32,
     pub deg: i16,
     pub duration: f32,
 }
@@ -23,7 +21,6 @@ pub struct TurnWaypoint {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct DelayWaypoint {
-    pub id: i32,
     pub duration: f32,
 }
 

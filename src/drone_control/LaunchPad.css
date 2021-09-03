@@ -1,0 +1,10 @@
+.MissionInfo {
+  margin-top: 12px;
+  background-color: beige !important;
+  padding: 6px;
+}
+
+.MissionInfoHeader {
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}

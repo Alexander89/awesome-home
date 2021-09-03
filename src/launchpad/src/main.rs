@@ -3,9 +3,7 @@ use actyx_sdk::{app_id, AppManifest, HttpClient};
 use url::Url;
 
 mod controller;
-mod drone_control;
-#[cfg(feature = "wifi")]
-mod network;
+mod hardware;
 mod twin;
 mod twins;
 

@@ -1591,9 +1591,9 @@ dependencies = [
 
 [[package]]
 name = "tello"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7a81f59fd294f780efc4342220191bd023989dd70885d419bc29f5ae263d01b"
+checksum = "1f93041302de211ef5cfd244bdb29e335f7a5264067881d42a008d6ffc949a66"
 dependencies = [
  "byteorder",
  "chrono",
@@ -1722,9 +1722,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-stream-ext"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5721e8ae89d47e4821f0e96afbe62cfa1ecf71cccf86ca2092d7374acf98f17d"
+checksum = "1160613468f2e499deb0bcee505ab97d912c6f0a3433ab8128fa1bf9bc35224f"
 dependencies = [
  "futures",
  "pin-project-lite",

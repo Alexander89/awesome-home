@@ -1,4 +1,5 @@
 use std::convert::TryInto;
+use std::time::{Duration, SystemTime};
 
 use self::ev::Position;
 use self::events as ev;
@@ -10,6 +11,27 @@ use actyx_sdk::{tag, Event, Payload, TagSet};
 
 pub mod events;
 pub mod states;
+
+pub fn tag_drone_id<T>(id: &T) -> TagSet
+where
+    T: core::fmt::Display,
+{
+    tag_with_id("drone", id)
+}
+
+pub fn tag_drone_mission_started<T>(id: &T) -> TagSet
+where
+    T: core::fmt::Display,
+{
+    tag_drone_id(id) + tag!("drone.mission.started")
+}
+
+pub fn tag_drone_mission_completed<T>(id: &T) -> TagSet
+where
+    T: core::fmt::Display,
+{
+    tag_drone_id(id) + tag!("drone.mission.completed")
+}
 
 #[derive(Clone)]
 pub struct DroneTwin {
@@ -31,7 +53,6 @@ impl Twin for DroneTwin {
     }
 
     fn reducer(state: Self::State, event: Event<Payload>) -> Self::State {
-        println!("droneEvent {:?}", event.payload.json_value());
         if let Ok(ev) = event.extract::<ev::DroneEvent>() {
             match ev.payload {
                 ev::DroneEvent::DroneDefined(e) => {
@@ -39,11 +60,15 @@ impl Twin for DroneTwin {
                         id: e.id,
                         ip: e.ip,
                         ssid: e.ssid,
+                        enabled: SystemTime::UNIX_EPOCH,
                         battery: 100,
                         connected: false,
                     })
                 }
                 ev::DroneEvent::DroneReady(e) => DroneTwin::handle_ready_event(state, e),
+                ev::DroneEvent::DroneActivated(e) => {
+                    DroneTwin::handle_activated_event(state, e, event.meta)
+                }
                 ev::DroneEvent::DroneConnected(e) => DroneTwin::handle_connected_event(state, e),
                 ev::DroneEvent::DroneStatsUpdated(e) => {
                     DroneTwin::handle_states_updated_event(state, e)
@@ -74,7 +99,50 @@ impl DroneTwin {
     ) -> states::DroneTwinState {
         match state {
             states::DroneTwinState::Undefined(_) => state,
-            states::DroneTwinState::Ready(_) => state,
+            states::DroneTwinState::Ready(state) => {
+                states::DroneTwinState::Ready(states::ReadyState {
+                    id: state.id,
+                    ip: state.ip,
+                    ssid: state.ssid,
+                    battery: state.battery,
+                    enabled: state.enabled,
+                    connected: false,
+                })
+            }
+            states::DroneTwinState::Launched(state) => {
+                states::DroneTwinState::Ready(states::ReadyState {
+                    id: state.id,
+                    ip: state.ip,
+                    ssid: state.ssid,
+                    enabled: SystemTime::UNIX_EPOCH,
+                    battery: state.battery,
+                    connected: false,
+                })
+            }
+            states::DroneTwinState::Used(state) => {
+                states::DroneTwinState::Ready(states::ReadyState {
+                    id: state.id,
+                    ip: state.ip,
+                    ssid: state.ssid,
+                    enabled: SystemTime::UNIX_EPOCH,
+                    battery: state.battery,
+                    connected: false,
+                })
+            }
+        }
+    }
+    fn handle_activated_event(
+        state: states::DroneTwinState,
+        _: events::DroneActivatedEvent,
+        meta: actyx_sdk::Metadata,
+    ) -> states::DroneTwinState {
+        match state {
+            states::DroneTwinState::Undefined(_) => state,
+            states::DroneTwinState::Ready(mut state) => {
+                state.enabled =
+                    SystemTime::UNIX_EPOCH + Duration::from_micros(meta.timestamp.into());
+                return states::DroneTwinState::Ready(state);
+            }
             states::DroneTwinState::Launched(_) => state,
             states::DroneTwinState::Used(state) => {
                 states::DroneTwinState::Ready(states::ReadyState {
@@ -82,6 +150,7 @@ impl DroneTwin {
                     ip: state.ip,
                     ssid: state.ssid,
                     battery: state.battery,
+                    enabled: SystemTime::UNIX_EPOCH + Duration::from_micros(meta.timestamp.into()),
                     connected: false,
                 })
             }
@@ -103,6 +172,7 @@ impl DroneTwin {
                     id: state.id,
                     ip: state.ip,
                     ssid: state.ssid,
+                    enabled: SystemTime::UNIX_EPOCH,
                     battery: state.battery,
                     connected: true,
                 })
@@ -253,7 +323,7 @@ impl DroneTwin {
             states::DroneTwinState::Undefined(_) => state,
             states::DroneTwinState::Ready(_) => state,
             states::DroneTwinState::Launched(mut s) => {
-                s.completed = false;
+                s.completed = true;
                 s.target_waypoint_id = None;
                 states::DroneTwinState::Launched(s)
             }
@@ -283,27 +353,6 @@ impl DroneTwin {
     }
 }
 
-pub fn tag_drone_id<T>(id: &T) -> TagSet
-where
-    T: core::fmt::Display,
-{
-    tag_with_id("drone", &id)
-}
-
-pub fn tag_drone_mission_started<T>(id: &T) -> TagSet
-where
-    T: core::fmt::Display,
-{
-    tag_drone_id(id) + tag!("drone.mission.started")
-}
-
-pub fn tag_drone_mission_completed<T>(id: &T) -> TagSet
-where
-    T: core::fmt::Display,
-{
-    tag_drone_id(id) + tag!("drone.mission.completed")
-}
-
 impl DroneTwin {
     #[allow(dead_code)]
     pub async fn emit_drone_ready(
@@ -317,6 +366,21 @@ impl DroneTwin {
             ))
             .await
     }
+
+    #[allow(dead_code)]
+    pub async fn emit_drone_activated(
+        service: impl EventService,
+        id: String,
+        launchpad_id: String,
+    ) -> Result<PublishResponse, anyhow::Error> {
+        service
+            .publish(mk_publish_request(
+                tag_drone_id(&id),
+                &ev::DroneEvent::DroneActivated(ev::DroneActivatedEvent { id, launchpad_id }),
+            ))
+            .await
+    }
+
     #[allow(dead_code)]
     pub async fn emit_drone_connected(
         service: impl EventService,

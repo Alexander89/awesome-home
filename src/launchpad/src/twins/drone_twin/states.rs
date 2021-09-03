@@ -1,3 +1,5 @@
+use std::time::{Duration, SystemTime};
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct UndefinedState {
     pub id: String,
@@ -9,7 +11,13 @@ pub struct ReadyState {
     pub ip: String,
     pub ssid: String,
     pub battery: u8,
+    pub enabled: SystemTime,
     pub connected: bool,
+}
+impl ReadyState {
+    pub fn is_enabled(&self) -> bool {
+        self.enabled.elapsed().unwrap() < Duration::new(15, 0)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -50,6 +58,7 @@ impl Default for DroneTwinState {
 }
 
 impl DroneTwinState {
+    #[allow(dead_code)]
     pub fn id(&self) -> String {
         match self {
             DroneTwinState::Undefined(s) => s.id.to_owned(),
