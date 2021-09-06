@@ -2,7 +2,7 @@ use self::events as ev;
 use crate::twin::Twin;
 use crate::twin::{mk_publish_request, tag_with_id};
 use actyx_sdk::service::{EventService, PublishResponse};
-use actyx_sdk::{Event, Payload, TagSet};
+use actyx_sdk::{tag, Event, Payload, TagSet};
 pub mod events;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -118,6 +118,13 @@ where
     tag_with_id("launchpad", &id)
 }
 
+pub fn tag_launchpad_registered<T>(id: &T) -> TagSet
+where
+    T: core::fmt::Display,
+{
+    tag_launchpad_id(&id) + tag!("launchpad.registered")
+}
+
 impl LaunchpadTwin {
     #[allow(dead_code)]
     pub async fn emit_launchpad_registered(
@@ -126,7 +133,7 @@ impl LaunchpadTwin {
     ) -> Result<PublishResponse, anyhow::Error> {
         service
             .publish(mk_publish_request(
-                tag_launchpad_id(&id),
+                tag_launchpad_registered(&id),
                 &ev::LaunchPadEvent::LaunchPadRegistered(ev::LaunchPadRegisteredEvent { id }),
             ))
             .await

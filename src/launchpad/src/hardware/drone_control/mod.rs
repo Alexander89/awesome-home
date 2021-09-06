@@ -74,9 +74,39 @@ impl DroneControl {
 
                     let target_height = *height as i32;
                     let z = target_height - d.odometry.z.round() as i32;
-                    d.go_to((distance * 100.0).round() as i32, 0, z, 100)
+                    let distance = (distance * 100.0).round();
+                    let mut fife_meters = ((distance / 500.0).floor() as i32).max(0);
+                    let mut rest = (distance % 500.0) as i32;
+                    let mut do_480_step = false;
+
+                    // if the last movement would be smaller than
+                    if rest < 20 && fife_meters > 0 {
+                        fife_meters -= 1;
+                        do_480_step = true;
+                        rest += 20;
+                    }
+
+                    // only the last segment will move in the Z direction to avoid < 20 cm movements
+                    let rest_z = (!do_480_step && fife_meters == 0)
+                        .then(|| z)
+                        .unwrap_or_default();
+                    d.go_to(rest, 0, rest_z, 100)
                         .await
                         .map_err(anyhow::Error::msg)?;
+
+                    if do_480_step {
+                        let d_z = (fife_meters == 0).then(|| z).unwrap_or_default();
+                        d.go_to(480, 0, d_z, 100)
+                            .await
+                            .map_err(anyhow::Error::msg)?;
+                    }
+                    for i in 0..fife_meters {
+                        let d_z = (i == fife_meters - 1).then(|| z).unwrap_or_default();
+                        d.go_to(500, 0, d_z, 100)
+                            .await
+                            .map_err(anyhow::Error::msg)?;
+                    }
+
                     // d.forward(0).await.map_err(anyhow::Error::msg)?;
                 } else {
                     return Err(anyhow::Error::msg("no drone connected".to_string()));
